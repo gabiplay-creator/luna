@@ -1,649 +1,101 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YourBrand | 세상에 없던 것을 만듭니다</title>
-  <meta name="description" content="YourBrand는 사람과 기술 사이에 새로운 경험을 만드는 소프트웨어 팀입니다." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0a0a0a;
-      --bg2: #111111;
-      --bg3: #1a1a1a;
-      --text: #f0ede8;
-      --text2: #888880;
-      --text3: #555550;
-      --accent: #c8f060;
-      --accent2: #a0c840;
-      --border: rgba(255,255,255,0.08);
-      --font: 'Inter', 'Noto Sans KR', sans-serif;
-    }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    /* ── NAV ── */
-    nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 2.5rem;
-      height: 60px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(10,10,10,0.85);
-      backdrop-filter: blur(12px);
-    }
-
-    .logo {
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 2rem;
-      list-style: none;
-    }
-
-    .nav-links a {
-      font-size: 0.8rem;
-      color: var(--text2);
-      text-decoration: none;
-      letter-spacing: 0.05em;
-      transition: color 0.2s;
-    }
-
-    .nav-links a:hover { color: var(--text); }
-
-    .nav-cta {
-      font-size: 0.75rem;
-      color: var(--bg);
-      background: var(--accent);
-      padding: 0.45rem 1.1rem;
-      border-radius: 999px;
-      text-decoration: none;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      transition: background 0.2s;
-    }
-
-    .nav-cta:hover { background: var(--accent2); }
-
-    /* ── TICKER ── */
-    .ticker {
-      margin-top: 60px;
-      overflow: hidden;
-      border-bottom: 1px solid var(--border);
-      padding: 0.6rem 0;
-      background: var(--bg2);
-    }
-
-    .ticker-inner {
-      display: flex;
-      gap: 3rem;
-      white-space: nowrap;
-      animation: ticker 25s linear infinite;
-      width: max-content;
-    }
-
-    .ticker-inner span {
-      font-size: 0.7rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text3);
-    }
-
-    .ticker-inner .dot {
-      color: var(--accent);
-      font-size: 0.5rem;
-    }
-
-    @keyframes ticker {
-      from { transform: translateX(0); }
-      to { transform: translateX(-50%); }
-    }
-
-    /* ── HERO ── */
-    .hero {
-      min-height: 92vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 6rem 2.5rem 4rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -20%;
-      right: -10%;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(200,240,96,0.06) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .hero-eyebrow {
-      font-size: 0.7rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 1.5rem;
-    }
-
-    .hero h1 {
-      font-size: clamp(2.8rem, 7vw, 6rem);
-      font-weight: 700;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      max-width: 900px;
-      margin-bottom: 1.8rem;
-    }
-
-    .hero h1 em {
-      font-style: normal;
-      color: var(--accent);
-    }
-
-    .hero-desc {
-      font-size: 1.05rem;
-      color: var(--text2);
-      max-width: 500px;
-      line-height: 1.8;
-      margin-bottom: 2.5rem;
-    }
-
-    .hero-btns {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.6rem;
-      background: var(--accent);
-      color: var(--bg);
-      font-weight: 600;
-      font-size: 0.85rem;
-      border-radius: 999px;
-      text-decoration: none;
-      transition: background 0.2s;
-    }
-
-    .btn-primary:hover { background: var(--accent2); }
-
-    .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.6rem;
-      border: 1px solid var(--border);
-      color: var(--text2);
-      font-size: 0.85rem;
-      border-radius: 999px;
-      text-decoration: none;
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    .btn-secondary:hover { border-color: var(--text3); color: var(--text); }
-
-    /* ── BELIEF ── */
-    .belief {
-      padding: 6rem 2.5rem;
-      border-top: 1px solid var(--border);
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4rem;
-      align-items: center;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .belief-label {
-      font-size: 0.7rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 1rem;
-    }
-
-    .belief-text {
-      font-size: 1.4rem;
-      font-weight: 300;
-      line-height: 1.8;
-      color: var(--text2);
-    }
-
-    .belief-text strong {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    .how-grid {
-      display: grid;
-      gap: 2rem;
-    }
-
-    .how-item {
-      display: flex;
-      gap: 1.2rem;
-      align-items: flex-start;
-    }
-
-    .how-num {
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      color: var(--text3);
-      padding-top: 0.15rem;
-      min-width: 24px;
-    }
-
-    .how-item h3 {
-      font-size: 0.9rem;
-      font-weight: 600;
-      margin-bottom: 0.4rem;
-      color: var(--text);
-    }
-
-    .how-item p {
-      font-size: 0.82rem;
-      color: var(--text2);
-      line-height: 1.7;
-    }
-
-    /* ── WORK ── */
-    .work {
-      padding: 6rem 2.5rem;
-      border-top: 1px solid var(--border);
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-bottom: 3rem;
-    }
-
-    .section-label {
-      font-size: 0.7rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 0.5rem;
-    }
-
-    .section-header h2 {
-      font-size: clamp(1.6rem, 3.5vw, 2.8rem);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-    }
-
-    .work-grid {
-      display: grid;
-      gap: 1.5px;
-      background: var(--border);
-    }
-
-    .work-item {
-      display: grid;
-      grid-template-columns: 80px 1fr auto;
-      align-items: center;
-      gap: 2rem;
-      padding: 2rem 2rem;
-      background: var(--bg);
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.2s;
-    }
-
-    .work-item:hover { background: var(--bg2); }
-
-    .work-num {
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      color: var(--text3);
-    }
-
-    .work-info h3 {
-      font-size: 1.05rem;
-      font-weight: 600;
-      margin-bottom: 0.3rem;
-      color: var(--text);
-    }
-
-    .work-info p {
-      font-size: 0.8rem;
-      color: var(--text2);
-    }
-
-    .work-badge {
-      font-size: 0.65rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0.3rem 0.8rem;
-      border-radius: 999px;
-      font-weight: 600;
-    }
-
-    .badge-live {
-      background: rgba(200,240,96,0.12);
-      color: var(--accent);
-      border: 1px solid rgba(200,240,96,0.25);
-    }
-
-    .badge-soon {
-      background: rgba(255,255,255,0.05);
-      color: var(--text3);
-      border: 1px solid var(--border);
-    }
-
-    /* ── CTA ── */
-    .cta-section {
-      border-top: 1px solid var(--border);
-      text-align: center;
-      padding: 7rem 2.5rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .cta-section::before {
-      content: '';
-      position: absolute;
-      bottom: -40%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 700px;
-      height: 500px;
-      background: radial-gradient(circle, rgba(200,240,96,0.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .cta-section h2 {
-      font-size: clamp(2rem, 5vw, 4rem);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      margin-bottom: 1.2rem;
-    }
-
-    .cta-section p {
-      font-size: 1rem;
-      color: var(--text2);
-      margin-bottom: 2.5rem;
-    }
-
-    /* ── FOOTER ── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 3rem 2.5rem;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 2rem;
-      align-items: start;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .footer-brand p {
-      font-size: 0.78rem;
-      color: var(--text3);
-      margin-top: 0.5rem;
-      max-width: 280px;
-      line-height: 1.6;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 3rem;
-    }
-
-    .footer-col h4 {
-      font-size: 0.7rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text3);
-      margin-bottom: 0.8rem;
-    }
-
-    .footer-col a {
-      display: block;
-      font-size: 0.8rem;
-      color: var(--text2);
-      text-decoration: none;
-      margin-bottom: 0.4rem;
-      transition: color 0.2s;
-    }
-
-    .footer-col a:hover { color: var(--text); }
-
-    .footer-copy {
-      border-top: 1px solid var(--border);
-      padding: 1.5rem 2.5rem;
-      font-size: 0.72rem;
-      color: var(--text3);
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    /* ── REVEAL ANIMATION ── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(24px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
-    }
-
-    .reveal.visible {
-      opacity: 1;
-      transform: none;
-    }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
-      nav { padding: 0 1.2rem; }
-      .nav-links { display: none; }
-      .hero { padding: 4rem 1.5rem 3rem; }
-      .belief {
-        grid-template-columns: 1fr;
-        padding: 4rem 1.5rem;
-        gap: 2.5rem;
-      }
-      .work { padding: 4rem 1.5rem; }
-      .work-item { grid-template-columns: 50px 1fr; gap: 1rem; }
-      .work-badge { display: none; }
-      footer { grid-template-columns: 1fr; padding: 2rem 1.5rem; }
-      .footer-links { flex-wrap: wrap; gap: 1.5rem; }
-      .section-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>글로벌랩스 DB 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="assets/config.js"></script>
 </head>
 <body>
+<div class="overlay" id="overlay"><div id="loadMsg">시트에서 데이터를 불러오는 중입니다…</div><div class="note">데이터가 많으면 10~20초 걸릴 수 있어요.</div></div>
 
-<!-- NAV -->
-<nav>
-  <a class="logo" href="#">YourBrand</a>
-  <ul class="nav-links">
-    <li><a href="#belief">소개</a></li>
-    <li><a href="#work">제품</a></li>
-    <li><a href="#contact">문의</a></li>
-  </ul>
-  <a class="nav-cta" href="#contact">문의하기</a>
-</nav>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>글로벌랩스 DB 대시보드</h1>
+      <div class="sub" id="meta">-</div>
+    </div>
+    <div class="head-right">
+      <button class="btn" id="reload">최신 데이터로 새로고침</button>
+    </div>
+  </header>
 
-<!-- TICKER -->
-<div class="ticker">
-  <div class="ticker-inner" id="ticker">
-    <span>YOURBRAND</span><span class="dot">●</span>
-    <span>WE BUILD WHAT DOESN'T EXIST</span><span class="dot">●</span>
-    <span>소프트웨어 개발</span><span class="dot">●</span>
-    <span>IT COMPANY</span><span class="dot">●</span>
-    <span>YOURBRAND</span><span class="dot">●</span>
-    <span>WE BUILD WHAT DOESN'T EXIST</span><span class="dot">●</span>
-    <span>소프트웨어 개발</span><span class="dot">●</span>
-    <span>IT COMPANY</span><span class="dot">●</span>
+  <section class="filters" aria-label="필터">
+    <div class="frow">
+      <span class="flabel">기간</span>
+      <input type="date" id="from" aria-label="시작일"> <span class="note">~</span> <input type="date" id="to" aria-label="종료일">
+      <div class="seg" id="presets">
+        <button data-p="7">최근 7일</button><button data-p="30">30일</button><button data-p="90">90일</button><button data-p="all">전체</button>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel">채널</span>
+      <div class="chips" id="chips"></div>
+      <button class="linkbtn" id="allSrc">모두 선택</button>
+    </div>
+    <div class="frow">
+      <span class="flabel">옵션</span>
+      <label class="toggle"><input type="checkbox" id="dedupe"> 같은 채널 내 중복 연락처 제외</label>
+    </div>
+  </section>
+
+  <section class="kpis" aria-label="요약">
+    <div class="kpi"><div class="l">총 DB</div><div class="v" id="kTotal">-</div><div class="n" id="kTotalN"></div></div>
+    <div class="kpi"><div class="l">일평균</div><div class="v" id="kAvg">-</div><div class="n" id="kAvgN"></div></div>
+    <div class="kpi"><div class="l">피크 시간대</div><div class="v" id="kHour">-</div><div class="n" id="kHourN"></div></div>
+    <div class="kpi"><div class="l">최다 요일</div><div class="v" id="kDow">-</div><div class="n" id="kDowN"></div></div>
+    <div class="kpi"><div class="l">중복 연락처</div><div class="v" id="kDup">-</div><div class="n" id="kDupN"></div></div>
+  </section>
+
+  <div class="empty" id="empty">선택한 기간과 채널에 해당하는 데이터가 없습니다. 기간을 넓히거나 채널을 추가로 선택해 보세요.</div>
+
+  <div class="grid">
+    <section class="card full">
+      <div class="chead">
+        <h2 id="trendTitle">일별 유입 추이</h2>
+        <div class="seg" id="trendSeg">
+          <button data-v="day">일별</button><button data-v="week">주간</button><button data-v="month">월별</button>
+        </div>
+      </div>
+      <div class="cbox tall"><canvas id="trendChart"></canvas></div>
+      <div class="note" id="trendNote"></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>요일별</h2><span class="note" id="dowNote"></span></div>
+      <div class="cbox"><canvas id="dowChart"></canvas></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>시간대별</h2><span class="note" id="hourNote"></span></div>
+      <div class="cbox"><canvas id="hourChart"></canvas></div>
+    </section>
+
+    <section class="card full">
+      <div class="chead">
+        <h2>항목별 비율</h2>
+        <div class="seg" id="dimSeg">
+          <button data-v="source">채널</button><button data-v="note">비고</button><button data-v="platform">META 플랫폼</button><button data-v="campaign">META 캠페인</button>
+        </div>
+      </div>
+      <div class="share">
+        <div class="cbox"><canvas id="shareChart"></canvas></div>
+        <div class="tbl"><table id="shareTable"></table></div>
+      </div>
+      <div class="note" id="shareNote"></div>
+    </section>
   </div>
+
+  <details>
+    <summary>데이터 상태 (탭별 인식 결과)</summary>
+    <table id="reportTable"></table>
+  </details>
 </div>
 
-<!-- HERO -->
-<section class="hero">
-  <p class="hero-eyebrow reveal">YourBrand · IT Company</p>
-  <h1 class="reveal">세상에 없던<br /><em>경험을 만드는</em><br />사람들</h1>
-  <p class="hero-desc reveal">일상과 산업 현장에 필요한 디지털 서비스를<br />직접 기획하고 개발합니다.</p>
-  <div class="hero-btns reveal">
-    <a href="#work" class="btn-primary">우리가 만든 것들 →</a>
-    <a href="#belief" class="btn-secondary">우리의 믿음</a>
-  </div>
-</section>
-
-<!-- BELIEF -->
-<section id="belief" style="border-top: 1px solid var(--border);">
-  <div class="belief">
-    <div>
-      <p class="belief-label reveal">What We Believe</p>
-      <p class="belief-text reveal">
-        기술은 단순히 편리함을 더하는 것이 아니라,<br />
-        <strong>사람들이 살아가는 방식 자체를</strong><br />
-        <strong>새롭게 만들 수 있습니다.</strong><br />
-        우리는 그 가능성을 믿습니다.
-      </p>
-    </div>
-    <div class="how-grid">
-      <div class="how-item reveal">
-        <span class="how-num">01</span>
-        <div>
-          <h3>기획</h3>
-          <p>세상에 필요한 것이 무엇인지, 아직 해결되지 않은 문제가 무엇인지를 끊임없이 묻습니다. 좋은 제품은 좋은 질문에서 시작됩니다.</p>
-        </div>
-      </div>
-      <div class="how-item reveal">
-        <span class="how-num">02</span>
-        <div>
-          <h3>개발</h3>
-          <p>질문이 제품이 되는 모든 과정을 직접 해냅니다. 아이디어가 현실이 되는 순간까지, 타협하지 않고 만들어냅니다.</p>
-        </div>
-      </div>
-      <div class="how-item reveal">
-        <span class="how-num">03</span>
-        <div>
-          <h3>운영</h3>
-          <p>세상에 내놓은 순간이 끝이 아닙니다. 제품이 더 많은 사람의 삶에 깊이 닿을 수 있도록, 끊임없이 개선하고 성장시킵니다.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- WORK -->
-<section id="work" class="work">
-  <div class="section-header">
-    <div>
-      <p class="section-label">Selected Work</p>
-      <h2>우리가 만든 것들</h2>
-    </div>
-  </div>
-
-  <div class="work-grid reveal">
-    <a class="work-item" href="#">
-      <span class="work-num">01</span>
-      <div class="work-info">
-        <h3>프로젝트 A</h3>
-        <p>프로젝트에 대한 간략한 설명을 여기에 씁니다.</p>
-      </div>
-      <span class="work-badge badge-live">Live</span>
-    </a>
-    <a class="work-item" href="#">
-      <span class="work-num">02</span>
-      <div class="work-info">
-        <h3>프로젝트 B</h3>
-        <p>프로젝트에 대한 간략한 설명을 여기에 씁니다.</p>
-      </div>
-      <span class="work-badge badge-soon">Coming</span>
-    </a>
-    <a class="work-item" href="#">
-      <span class="work-num">03</span>
-      <div class="work-info">
-        <h3>프로젝트 C</h3>
-        <p>프로젝트에 대한 간략한 설명을 여기에 씁니다.</p>
-      </div>
-      <span class="work-badge badge-live">Live</span>
-    </a>
-  </div>
-</section>
-
-<!-- CTA -->
-<section id="contact" class="cta-section">
-  <h2 class="reveal">다음 파도를<br />함께 만들까요?</h2>
-  <p class="reveal">제휴·투자·협업, 무엇이든 좋습니다.</p>
-  <a class="btn-primary reveal" href="mailto:hello@yourbrand.com">문의하기 →</a>
-</section>
-
-<!-- FOOTER -->
-<footer>
-  <div class="footer-brand">
-    <a class="logo" href="#">YourBrand</a>
-    <p>사람과 기술 사이에 새로운 흐름을 만드는 소프트웨어 팀입니다.</p>
-  </div>
-  <div class="footer-links">
-    <div class="footer-col">
-      <h4>Company</h4>
-      <a href="#belief">소개</a>
-      <a href="#work">제품</a>
-      <a href="#contact">문의 / 제휴</a>
-    </div>
-    <div class="footer-col">
-      <h4>Policy</h4>
-      <a href="#">개인정보처리방침</a>
-      <a href="#">이용약관</a>
-    </div>
-  </div>
-</footer>
-<div class="footer-copy">
-  Copyright © 2026 YourBrand. All rights reserved.
-</div>
-
-<script>
-  const reveals = document.querySelectorAll('.reveal');
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((e, i) => {
-      if (e.isIntersecting) {
-        setTimeout(() => e.target.classList.add('visible'), i * 80);
-        observer.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.1 });
-  reveals.forEach(el => observer.observe(el));
-  document.querySelectorAll('.reveal').forEach(el => {
-    if (el.getBoundingClientRect().top < window.innerHeight) {
-      el.classList.add('visible');
-    }
-  });
-</script>
-
+<script src="assets/app.js"></script>
 </body>
 </html>
