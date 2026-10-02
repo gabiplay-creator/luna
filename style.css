@@ -77,3 +77,39 @@ details table { margin-top: 8px; background: var(--panel); border: 1px solid var
   .share { grid-template-columns: 1fr; }
   .bar { display: none; }
 }
+
+/* ---------- v2: 실시간 예측 ---------- */
+.head-right { flex-wrap: wrap; }
+.live { margin-bottom: 16px; }
+.live .chead { align-items: baseline; }
+.live-lead { font-size: 19px; line-height: 1.6; letter-spacing: -0.01em; margin: 4px 0 16px; max-width: 60em; }
+.live-lead b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.live-lead .hl { color: var(--accent); }
+.live-tbl { max-height: none; margin-bottom: 18px; }
+.live-tbl td, .live-tbl th { padding: 8px 10px; }
+.live-tbl tbody tr { cursor: pointer; }
+.live-tbl tbody tr:hover td { background: var(--soft); }
+.live-tbl tbody tr.sel td { background: #E7EEFC; }
+.live-tbl tr.lv0 td { font-weight: 700; border-bottom: 2px solid var(--line); }
+.live-tbl tr.lv1 td { font-weight: 650; background: #F8FAFC; }
+.live-tbl tr.lv1.sel td { background: #E7EEFC; }
+.live-tbl tr.lv2 td { font-weight: 600; }
+.live-tbl tr.lv2 td:first-child { padding-left: 24px; }
+.live-tbl tr.lv3 td:first-child { padding-left: 42px; color: var(--ink); }
+.live-tbl td.fc { color: var(--accent); font-weight: 700; }
+.live-tbl td.dim { color: var(--muted); }
+.live-tbl .delta { font-size: 11px; margin-left: 4px; }
+.up { color: #0E8F72; } .down { color: #C2413A; }
+.prog { width: 110px; }
+.prog div { height: 8px; background: #DDE5F2; border-radius: 4px; overflow: hidden; }
+.prog span { display: block; height: 100%; background: var(--ink); }
+.live-sub { margin-top: 4px; }
+h3 { font-size: 14px; font-weight: 650; margin: 0; }
+.method { margin: 12px 0 0; max-width: 72em; line-height: 1.6; }
+
+.chipgroups { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.cg { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cg-name { border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 600; padding: 4px 2px; border-bottom: 2px solid var(--gc); }
+.cg-name:hover { color: var(--ink); }
+.seg-row { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 960px) { .prog { display: none; } .live-lead { font-size: 16px; } }

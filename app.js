@@ -1,5 +1,21 @@
+/* =========================================================
+ * 글로벌랩스 DB 대시보드 v2
+ * - 채널 짧은 이름(G, H …), 그룹(주력1팀·주력2팀·지원군)
+ * - 오늘 마감·내일 DB 예측 (5분마다 자동 갱신)
+ * ========================================================= */
+
+/* ---------- 설정: 그룹과 색상은 여기서 바꾸면 됩니다 ---------- */
+const GROUPS = [
+  { id: 'main1', name: '주력1팀', army: '주력군', members: ['G', 'H'], color: '#2F5BD3' },
+  { id: 'main2', name: '주력2팀', army: '주력군', members: ['D', 'B', 'U'], color: '#0E8F72' },
+  { id: 'support', name: '지원군', army: '지원군', members: null, color: '#E2612E' } // null = 위에 없는 나머지 전부
+];
+const CHANNEL_COLORS = { G: '#2F5BD3', H: '#86A2F2', D: '#0E8F72', B: '#3DBB93', U: '#9AD9C1', M: '#E2612E', T: '#F0A83A' };
+const EXTRA_COLORS = ['#9C4DCC', '#4C6A92', '#B5651D', '#7A8B2E'];
+const AUTO_REFRESH_MIN = 5;
+const FC = { profileDays: 28, levelDays: 7, weekdayDays: 56, backtestDays: 14, shrink: 200, window: 100 };
+
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
-const SRC_COLORS = ['#2F5BD3', '#12A38B', '#E0A100', '#C2417A', '#6A4FC9', '#E2612E', '#3B8FB8', '#7A8B2E', '#9C4DCC', '#4C6A92'];
 const RANK_COLORS = ['#2F5BD3', '#12A38B', '#E0A100', '#C2417A', '#6A4FC9', '#E2612E', '#3B8FB8', '#7A8B2E', '#9C4DCC', '#B5651D'];
 const OTHER = '#C3CBD5';
 const PLATFORM_NAMES = { fb: 'Facebook', ig: 'Instagram', an: 'Audience Network', ms: 'Messenger', wa: 'WhatsApp' };
@@ -14,30 +30,38 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', dim: 'source', preset: 'all' };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true };
 const charts = {};
+const CFG = window.DASHBOARD_CONFIG || {};
 
 const $ = id => document.getElementById(id);
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
 const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '0%';
 const pad = n => String(n).padStart(2, '0');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const dayToStr = d => new Date(d * 864e5).toISOString().slice(0, 10);
 const strToDay = s => Math.floor(Date.parse(s + 'T00:00:00Z') / 864e5);
-const dowOf = d => (d + 3) % 7; // 0=월 … 6=일 (1970-01-01은 목요일)
+const dowOf = d => (d + 3) % 7; // 0=월 … 6=일
 const fmtDay = d => { const t = new Date(d * 864e5); return t.getUTCFullYear() + '.' + pad(t.getUTCMonth() + 1) + '.' + pad(t.getUTCDate()); };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const shortName = s => { const m = String(s).match(/^GL\s*[\(\[]\s*(.+?)\s*[\)\]]$/i); return m ? m[1] : String(s); };
+const chColor = c => CHANNEL_COLORS[D.names[c]] || EXTRA_COLORS[c % EXTRA_COLORS.length];
 
-const CFG = window.DASHBOARD_CONFIG || {};
-
-async function load(force) {
-  $('overlay').classList.remove('hidden');
-  $('loadMsg').className = '';
-  $('loadMsg').textContent = '시트에서 데이터를 불러오는 중입니다…';
-  if (!CFG.API_URL || CFG.API_URL.indexOf('script.google.com') < 0) {
-    onErr(new Error('config.js 파일의 API_URL에 Apps Script 웹 앱 주소를 넣어 주세요.'));
-    return;
+/* ---------- 데이터 불러오기 ---------- */
+let loading = false;
+let lastLoad = 0;
+async function load(force, silent) {
+  if (loading) return;
+  loading = true;
+  if (!silent) {
+    $('overlay').classList.remove('hidden');
+    $('loadMsg').className = '';
+    $('loadMsg').textContent = '시트에서 데이터를 불러오는 중입니다…';
+  } else {
+    $('liveMeta').textContent = '최신 데이터 확인 중…';
   }
   try {
+    if (!CFG.API_URL || CFG.API_URL.indexOf('script.google.com') < 0) throw new Error('config.js 파일의 API_URL에 Apps Script 웹 앱 주소를 넣어 주세요.');
     const u = new URL(CFG.API_URL);
     if (CFG.TOKEN) u.searchParams.set('token', CFG.TOKEN);
     if (force) u.searchParams.set('refresh', '1');
@@ -48,10 +72,16 @@ async function load(force) {
     catch (_) { throw new Error('API 응답을 읽을 수 없습니다. 웹 앱 액세스 권한이 "모든 사용자"로 배포됐는지 확인해 주세요.'); }
     if (data.error) throw new Error(data.error === 'unauthorized' ? 'TOKEN이 Apps Script의 ACCESS_TOKEN과 다릅니다.' : data.error);
     onData(data);
-  } catch (e) { onErr(e); }
+  } catch (e) {
+    if (silent && D) { $('liveMeta').textContent = '자동 갱신에 실패했어요. 다음 주기에 다시 시도합니다.'; }
+    else onErr(e);
+  } finally {
+    loading = false;
+  }
 }
 
 function onErr(e) {
+  $('overlay').classList.remove('hidden');
   $('loadMsg').className = 'err';
   $('loadMsg').textContent = '데이터를 불러오지 못했습니다: ' + (e && e.message ? e.message : e);
 }
@@ -72,28 +102,82 @@ function onData(raw) {
     if (A.day[i] > max) max = A.day[i];
   }
   const first = !D;
+  lastLoad = Date.now();
   D = Object.assign(raw, { A: A, n: n, min: n ? min : 0, max: n ? max : 0 });
+  D.names = D.sources.map(shortName);
+  D.firstDay = D.names.map(() => Infinity);
+  for (let i = 0; i < n; i++) if (A.day[i] < D.firstDay[A.src[i]]) D.firstDay[A.src[i]] = A.day[i];
+  setupGroups();
+  parseAsOf();
+  D.max = Math.max(D.max, D.asOf.day);
 
-  if (first) {
-    S.src = new Set(D.sources.map((_, i) => i));
-    buildChips();
-  }
+  if (first) { S.src = new Set(D.names.map((_, i) => i)); }
+  buildChips();
   applyPreset(S.preset);
-  $('meta').textContent = '업데이트 ' + D.generatedAt + ' · 데이터 범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max);
+  renderLive();
+  $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max);
   renderReport();
   $('overlay').classList.add('hidden');
 }
 
+/** 서버가 시트를 읽은 시각(KST)을 예측 기준 시각으로 사용 */
+function parseAsOf() {
+  const m = String(D.generatedAt || '').match(/(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2})/);
+  if (m) {
+    D.asOf = { day: Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5), t: +m[4] + (+m[5]) / 60, label: m[4] + ':' + m[5] };
+  } else {
+    const k = new Date(Date.now() + 9 * 3600e3);
+    D.asOf = { day: Math.floor(k.getTime() / 864e5), t: k.getUTCHours() + k.getUTCMinutes() / 60, label: pad(k.getUTCHours()) + ':' + pad(k.getUTCMinutes()) };
+  }
+  D.asOf.t = clamp(D.asOf.t, 0, 23.99);
+}
+
+/* ---------- 그룹 ---------- */
+function setupGroups() {
+  const used = new Set();
+  D.groups = GROUPS.map(g => Object.assign({}, g, { idx: [] }));
+  D.groupOf = D.names.map(() => -1);
+  D.groups.forEach((g, gi) => {
+    if (!g.members) return;
+    g.members.forEach(m => {
+      const c = D.names.indexOf(m);
+      if (c >= 0 && !used.has(c)) { g.idx.push(c); used.add(c); D.groupOf[c] = gi; }
+    });
+  });
+  const rest = D.groups.findIndex(g => !g.members);
+  D.names.forEach((_, c) => { if (!used.has(c) && rest >= 0) { D.groups[rest].idx.push(c); D.groupOf[c] = rest; } });
+
+  // 표에 쓸 계층: 전체 → 군 → 팀 → 채널
+  const all = D.names.map((_, i) => i);
+  const H = [{ key: 'all', lv: 0, name: '전체', ch: all }];
+  [...new Set(D.groups.map(g => g.army))].forEach(army => {
+    const teams = D.groups.filter(g => g.army === army && g.idx.length);
+    const ch = teams.flatMap(t => t.idx);
+    if (!ch.length) return;
+    const single = teams.length === 1 && teams[0].name === army;
+    H.push({ key: 'army:' + army, lv: 1, name: army, ch: ch, color: single ? teams[0].color : null });
+    teams.forEach(t => {
+      if (!single) H.push({ key: 'team:' + t.id, lv: 2, name: t.name, ch: t.idx, color: t.color });
+      t.idx.forEach(c => H.push({ key: 'ch:' + c, lv: 3, name: D.names[c], ch: [c], color: chColor(c) }));
+    });
+  });
+  D.hier = H;
+}
+
 /* ---------- 필터 ---------- */
 function buildChips() {
-  $('chips').innerHTML = D.sources.map((s, i) =>
-    `<button class="chip" data-i="${i}" aria-pressed="true" style="--c:${SRC_COLORS[i % SRC_COLORS.length]}"><i></i>${esc(s)}</button>`).join('');
+  $('chips').innerHTML = D.groups.filter(g => g.idx.length).map(g =>
+    `<div class="cg"><button class="cg-name" data-g="${g.id}" style="--gc:${g.color}" title="${esc(g.army)} 전체 켜기/끄기">${esc(g.name)}</button>` +
+    g.idx.map(c => `<button class="chip" data-i="${c}" aria-pressed="true" style="--c:${chColor(c)}"><i></i>${esc(D.names[c])}</button>`).join('') +
+    '</div>').join('');
+  syncControls();
 }
 
 function applyPreset(p) {
   S.preset = p;
   if (p === 'all') { S.from = D.min; S.to = D.max; }
   else if (p) { S.to = D.max; S.from = Math.max(D.min, D.max - (+p) + 1); }
+  S.from = clamp(S.from, D.min, D.max); S.to = clamp(S.to, D.min, D.max);
   syncControls();
   render();
 }
@@ -102,9 +186,11 @@ function syncControls() {
   $('from').value = dayToStr(S.from); $('to').value = dayToStr(S.to);
   $('from').min = $('to').min = dayToStr(D.min);
   $('from').max = $('to').max = dayToStr(D.max);
-  document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === S.preset)));
-  document.querySelectorAll('#trendSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.trend)));
-  document.querySelectorAll('#dimSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.dim)));
+  const press = (sel, attr, val) => document.querySelectorAll(sel).forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === val)));
+  press('#presets button', 'p', S.preset);
+  press('#trendSeg button', 'v', S.trend);
+  press('#stackSeg button', 'v', S.stack);
+  press('#dimSeg button', 'v', S.dim);
   document.querySelectorAll('#chips .chip').forEach(b => b.setAttribute('aria-pressed', String(S.src.has(+b.dataset.i))));
 }
 
@@ -117,20 +203,244 @@ $('presets').addEventListener('click', e => { const b = e.target.closest('button
   syncControls(); render();
 }));
 $('chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  const i = +b.dataset.i;
-  if (S.src.has(i)) S.src.delete(i); else S.src.add(i);
+  const g = e.target.closest('.cg-name');
+  if (g) {
+    const grp = D.groups.find(x => x.id === g.dataset.g);
+    const allOn = grp.idx.every(c => S.src.has(c));
+    grp.idx.forEach(c => allOn ? S.src.delete(c) : S.src.add(c));
+  } else {
+    const b = e.target.closest('.chip'); if (!b) return;
+    const i = +b.dataset.i;
+    if (S.src.has(i)) S.src.delete(i); else S.src.add(i);
+  }
   syncControls(); render();
 });
-$('allSrc').addEventListener('click', () => { S.src = new Set(D.sources.map((_, i) => i)); syncControls(); render(); });
-$('dedupe').addEventListener('change', e => { S.dedupe = e.target.checked; render(); });
-$('trendSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.trend = b.dataset.v; syncControls(); render(); } });
-$('dimSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.dim = b.dataset.v; syncControls(); render(); } });
-$('reload').addEventListener('click', () => load(true));
+$('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
+$('dedupe').addEventListener('change', e => { S.dedupe = e.target.checked; render(); renderLive(); });
+const segHandler = (id, key) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S[key] = b.dataset.v; syncControls(); render(); } });
+segHandler('trendSeg', 'trend'); segHandler('stackSeg', 'stack'); segHandler('dimSeg', 'dim');
+$('reload').addEventListener('click', () => load(true, false));
+$('autoRefresh').addEventListener('change', e => { S.auto = e.target.checked; });
+$('liveTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+  S.liveKey = tr.dataset.key; renderLive();
+});
 
-/* ---------- 집계 & 렌더 ---------- */
+/* =========================================================
+ * 실시간 예측
+ * ========================================================= */
+function buildLive() {
+  const nc = D.names.length, W = FC.window;
+  const today = D.asOf.day, t = D.asOf.t, start = today - W + 1;
+  const M = new Float64Array(nc * W * 25); // [채널][일][시간 0~23, 24=시간없음]
+  const A = D.A;
+  for (let i = 0; i < D.n; i++) {
+    const d = A.day[i];
+    if (d < start || d > today) continue;
+    if (S.dedupe && A.dup[i]) continue;
+    const h = A.hour[i];
+    M[(A.src[i] * W + (d - start)) * 25 + (h >= 0 ? h : 24)]++;
+  }
+  const first = D.firstDay;
+  const cell = (c, d, h) => (d < start || d > today) ? 0 : M[(c * W + (d - start)) * 25 + h];
+  const timedTotal = (c, d) => { let s = 0; for (let h = 0; h < 24; h++) s += cell(c, d, h); return s; };
+  const dayTotal = (c, d) => timedTotal(c, d) + cell(c, d, 24);
+  const cumBefore = (c, d, x) => {
+    const fl = Math.min(24, Math.floor(x)); let s = 0;
+    for (let h = 0; h < fl; h++) s += cell(c, d, h);
+    if (fl < 24) s += (x - fl) * cell(c, d, fl);
+    return s;
+  };
+
+  // x시 이전에 하루 DB의 몇 %가 들어오는지 (ref일 이전 profileDays일 기준, 적은 채널은 전체 패턴으로 보정)
+  function profile(ref, x) {
+    const num = new Float64Array(nc), den = new Float64Array(nc);
+    let na = 0, da = 0;
+    for (let c = 0; c < nc; c++) {
+      for (let d = ref - FC.profileDays; d < ref; d++) { num[c] += cumBefore(c, d, x); den[c] += timedTotal(c, d); }
+      na += num[c]; da += den[c];
+    }
+    const fAll = da > 0 ? na / da : x / 24;
+    return Array.from(num, (v, c) => (v + FC.shrink * fAll) / (den[c] + FC.shrink));
+  }
+  function level(c, ref, days) {
+    const s = Math.max(ref - days, first[c]);
+    if (!isFinite(s) || s >= ref) return null;
+    let sum = 0; for (let d = s; d < ref; d++) sum += dayTotal(c, d);
+    return sum / (ref - s);
+  }
+  function weekdayFactor(c, ref, dow) {
+    const s = Math.max(ref - FC.weekdayDays, first[c]);
+    if (!isFinite(s)) return 1;
+    let sa = 0, na = 0, sd = 0, nd = 0;
+    for (let d = s; d < ref; d++) { const v = dayTotal(c, d); sa += v; na++; if (dowOf(d) === dow) { sd += v; nd++; } }
+    if (nd < 2 || sa <= 0) return 1;
+    return clamp((sd / nd) / (sa / na), 0.5, 1.8);
+  }
+  function forecast(c, day, x, F, withUntimed) {
+    // 오늘은 현재 시간대에 이미 들어온 DB를 모두 포함, 과거일 검증은 같은 시각까지만 비례 계산
+    const timed = withUntimed ? cumBefore(c, day, Math.min(24, Math.floor(x) + 1)) : cumBefore(c, day, x);
+    const so = timed + (withUntimed ? cell(c, day, 24) : 0);
+    const f = F[c];
+    const lv = level(c, day, FC.levelDays);
+    let rate;
+    if (lv == null) rate = f > 0.05 ? timed / f : timed;
+    else {
+      const base = lv * weekdayFactor(c, day, dowOf(day));
+      const pace = f > 0.03 ? timed / f : base;
+      rate = f * pace + (1 - f) * base; // 시간이 지날수록 오늘 페이스 비중 ↑
+    }
+    const rem = Math.max(0, (1 - f) * rate);
+    return { so: so, fc: so + rem, rem: rem };
+  }
+
+  // 오늘
+  const Fnow = profile(today, t);
+  const ch = D.names.map((_, c) => {
+    const r = forecast(c, today, t, Fnow, true);
+    // 내일: 최근 6일 + 오늘 예측의 평균 × 내일 요일 보정
+    const s = Math.max(today - (FC.levelDays - 1), first[c]);
+    let sum = r.fc, k = 1;
+    if (isFinite(s)) for (let d = s; d < today; d++) { sum += dayTotal(c, d); k++; }
+    r.tomorrow = isFinite(first[c]) ? (sum / k) * weekdayFactor(c, today, dowOf(today + 1)) : 0;
+    r.yAt = cumBefore(c, today - 1, t);
+    r.yTotal = dayTotal(c, today - 1);
+    return r;
+  });
+
+  // 과거 14일 같은 시각으로 같은 예측을 해서 오차 측정
+  const bt = [];
+  for (let k = 1; k <= FC.backtestDays; k++) {
+    const day = today - k, F = profile(day, t);
+    bt.push({
+      fc: D.names.map((_, c) => forecast(c, day, t, F, false).fc),
+      act: D.names.map((_, c) => dayTotal(c, day))
+    });
+  }
+
+  function rowStats(chs) {
+    const sum = key => chs.reduce((a, c) => a + ch[c][key], 0);
+    let es = 0, en = 0;
+    bt.forEach(b => {
+      let f = 0, a = 0;
+      chs.forEach(c => { f += b.fc[c]; a += b.act[c]; });
+      if (a >= 5) { es += Math.abs(f - a) / a; en++; }
+    });
+    return { so: sum('so'), fc: sum('fc'), rem: sum('rem'), tomorrow: sum('tomorrow'), yAt: sum('yAt'), yTotal: sum('yTotal'), err: en >= 3 ? es / en : null };
+  }
+
+  // 차트용 누적 곡선
+  const Fgrid = [];
+  for (let h = 0; h <= 24; h++) Fgrid.push(profile(today, h));
+  function curves(chs) {
+    const actual = [], path = [], yest = [], avg4 = [];
+    const so = chs.reduce((a, c) => a + ch[c].so, 0);
+    for (let h = 0; h <= 24; h++) {
+      yest.push({ x: h, y: chs.reduce((a, c) => a + cumBefore(c, today - 1, h), 0) });
+      let s4 = 0; for (let w = 1; w <= 4; w++) s4 += chs.reduce((a, c) => a + cumBefore(c, today - 7 * w, h), 0);
+      avg4.push({ x: h, y: s4 / 4 });
+      if (h <= t) actual.push({ x: h, y: chs.reduce((a, c) => a + cumBefore(c, today, h), 0) });
+    }
+    actual.push({ x: t, y: so });
+    path.push({ x: t, y: so });
+    for (let h = Math.ceil(t); h <= 24; h++) {
+      if (h <= t) continue;
+      let y = so;
+      chs.forEach(c => {
+        const f0 = Fnow[c], f1 = Fgrid[h][c];
+        y += ch[c].rem * (1 - f0 > 1e-6 ? clamp((f1 - f0) / (1 - f0), 0, 1) : 1);
+      });
+      path.push({ x: h, y: y });
+    }
+    return { actual, path, yest, avg4 };
+  }
+
+  return { today, t, Fnow, ch, rowStats, curves };
+}
+
+function renderLive() {
+  const L = buildLive();
+  const rows = D.hier.map(r => Object.assign({}, r, { st: L.rowStats(r.ch) }));
+  const all = rows[0].st;
+  const remainMin = Math.round((24 - L.t) * 60);
+  const shareDone = D.names.reduce((a, _, c) => a + L.Fnow[c] * L.ch[c].fc, 0) / Math.max(1, all.fc);
+
+  $('liveMeta').textContent = fmtDay(L.today) + ' (' + DOW[dowOf(L.today)] + ') ' + D.asOf.label + ' 기준, 마감까지 ' +
+    Math.floor(remainMin / 60) + '시간 ' + (remainMin % 60) + '분 남음';
+
+  const range = all.err != null ? ` (예상 범위 ${fmt(Math.max(all.so, all.fc * (1 - all.err)))}~${fmt(all.fc * (1 + all.err))}건)` : '';
+  $('liveLead').innerHTML =
+    `${D.asOf.label} 현재 <b>${fmt(all.so)}건</b>이 들어왔어요. 평소 이 시각이면 하루 DB의 약 ${Math.round(shareDone * 100)}%가 들어오는 시점이라, ` +
+    `자정까지 <b>${fmt(all.rem)}건</b> 정도 더 들어와 <b class="hl">${fmt(all.fc)}건</b>으로 마감할 것으로 보여요${range}. ` +
+    `내일(${DOW[dowOf(L.today + 1)]})은 <b>${fmt(all.tomorrow)}건</b> 정도로 예상돼요.`;
+
+  const delta = (a, b) => {
+    if (!b) return '';
+    const v = (a - b) / b * 100;
+    return `<span class="delta ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>`;
+  };
+  $('liveTable').innerHTML =
+    '<thead><tr><th>구분</th><th>현재</th><th class="prog">진행</th><th>오늘 예측</th><th>예상 범위</th><th>남은 예상</th><th>어제 같은 시각</th><th>어제 마감</th><th>내일 예측</th></tr></thead><tbody>' +
+    rows.map(r => {
+      const s = r.st;
+      const rg = s.err != null ? `${fmt(Math.max(s.so, s.fc * (1 - s.err)))}~${fmt(s.fc * (1 + s.err))}` : '-';
+      const dot = r.color ? `<i style="background:${r.color}"></i>` : '';
+      return `<tr class="lv${r.lv}${r.key === S.liveKey ? ' sel' : ''}" data-key="${esc(r.key)}">` +
+        `<td class="name">${dot}${esc(r.name)}</td>` +
+        `<td>${fmt(s.so)}</td>` +
+        `<td class="prog"><div><span style="width:${s.fc ? clamp(s.so / s.fc * 100, 0, 100).toFixed(0) : 0}%"></span></div></td>` +
+        `<td class="fc">${fmt(s.fc)}</td>` +
+        `<td class="dim" title="${s.err != null ? '최근 14일 같은 시각 예측의 평균 오차 ±' + (s.err * 100).toFixed(0) + '%' : '데이터가 부족해 범위를 계산하지 않았어요'}">${rg}</td>` +
+        `<td>+${fmt(s.rem)}</td>` +
+        `<td>${fmt(s.yAt)}${delta(s.so, s.yAt)}</td>` +
+        `<td class="dim">${fmt(s.yTotal)}</td>` +
+        `<td>${fmt(s.tomorrow)}</td></tr>`;
+    }).join('') + '</tbody>';
+
+  const sel = rows.find(r => r.key === S.liveKey) || rows[0];
+  $('liveChartTitle').textContent = sel.name + ' 시간대별 누적';
+  const cv = L.curves(sel.ch);
+  const nowLine = {
+    id: 'nowLine',
+    afterDatasetsDraw(chart) {
+      const x = chart.scales.x.getPixelForValue(L.t), a = chart.chartArea, ctx = chart.ctx;
+      ctx.save(); ctx.strokeStyle = '#18212E'; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(x, a.top); ctx.lineTo(x, a.bottom); ctx.stroke();
+      ctx.globalAlpha = 0.8; ctx.setLineDash([]); ctx.fillStyle = '#18212E'; ctx.font = '600 11px Pretendard, sans-serif';
+      ctx.fillText('지금 ' + D.asOf.label, Math.min(x + 4, a.right - 64), a.top + 12); ctx.restore();
+    }
+  };
+  draw('liveChart', {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: '오늘 실적', data: cv.actual, borderColor: '#18212E', borderWidth: 2.5, pointRadius: 0, tension: 0 },
+        { label: '오늘 예측', data: cv.path, borderColor: '#2F5BD3', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.2 },
+        { label: '어제', data: cv.yest, borderColor: '#A3AEBD', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+        { label: '최근 4주 같은 요일 평균', data: cv.avg4, borderColor: '#D3DAE3', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, tension: 0.2 }
+      ]
+    },
+    options: {
+      parsing: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      scales: {
+        x: { type: 'linear', min: 0, max: 24, ticks: { stepSize: 3, callback: v => v + '시' }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { precision: 0 } }
+      },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 14, boxHeight: 2, padding: 14 } },
+        tooltip: { callbacks: { title: i => { const x = i[0].parsed.x; return Math.floor(x) + ':' + pad(Math.round((x % 1) * 60)) + ' 까지'; }, label: c => ' ' + c.dataset.label + ': ' + fmt(c.parsed.y) + '건' } }
+      }
+    },
+    plugins: [nowLine]
+  });
+}
+
+/* =========================================================
+ * 기간 분석 (필터 적용)
+ * ========================================================= */
 function render() {
-  const A = D.A, ns = D.sources.length, days = S.to - S.from + 1;
+  const A = D.A, ns = D.names.length, days = S.to - S.from + 1;
   const dayBySrc = Array.from({ length: ns }, () => new Float64Array(days));
   const hourC = new Array(24).fill(0), dowC = new Array(7).fill(0);
   const dimC = new Map();
@@ -149,6 +459,7 @@ function render() {
     dowC[dowOf(d)]++;
     let k;
     if (S.dim === 'source') k = s;
+    else if (S.dim === 'group') k = D.groupOf[s];
     else if (S.dim === 'note') k = A.note[i];
     else if (S.dim === 'platform') { k = A.plat[i]; if (k < 0) continue; }
     else { k = A.camp[i]; if (k < 0) continue; }
@@ -156,7 +467,7 @@ function render() {
   }
 
   $('empty').style.display = total ? 'none' : 'block';
-  renderKpis(total, days, hourC, dowC, dupSeen, noTime);
+  renderKpis(total, days, hourC, dowC, dupSeen);
   renderTrend(dayBySrc);
   renderDow(dowC, total);
   renderHour(hourC, noTime);
@@ -165,7 +476,7 @@ function render() {
 
 function argmax(arr) { let m = -1, k = -1; arr.forEach((v, i) => { if (v > m) { m = v; k = i; } }); return k; }
 
-function renderKpis(total, days, hourC, dowC, dupSeen, noTime) {
+function renderKpis(total, days, hourC, dowC, dupSeen) {
   $('kTotal').textContent = fmt(total);
   $('kTotalN').textContent = fmtDay(S.from) + ' ~ ' + fmtDay(S.to);
   $('kAvg').textContent = (total / days).toFixed(1);
@@ -177,7 +488,7 @@ function renderKpis(total, days, hourC, dowC, dupSeen, noTime) {
   $('kDow').textContent = total ? DOW[pd] + '요일' : '-';
   $('kDowN').textContent = total ? '전체의 ' + pct(dowC[pd], total) : '';
   $('kDup').textContent = fmt(dupSeen);
-  $('kDupN').textContent = S.dedupe ? '집계에서 제외됨' : '집계에 포함됨 · 비율 ' + pct(dupSeen, total);
+  $('kDupN').textContent = S.dedupe ? '집계에서 제외됨' : '집계에 포함됨, 비율 ' + pct(dupSeen, total);
 }
 
 function draw(id, cfg) {
@@ -200,13 +511,20 @@ function renderTrend(dayBySrc) {
     if (!index.has(k)) { index.set(k, labels.length); labels.push(lab); titles.push(tit); }
     bucketOfDay.push(index.get(k));
   }
-  const sel = D.sources.map((_, i) => i).filter(i => S.src.has(i));
-  const datasets = sel.map(s => {
+  const bucket = chs => {
     const arr = new Array(labels.length).fill(0);
-    const src = dayBySrc[s];
-    for (let j = 0; j < src.length; j++) arr[bucketOfDay[j]] += src[j];
-    return { label: D.sources[s], data: arr, backgroundColor: SRC_COLORS[s % SRC_COLORS.length], stack: 'a', borderRadius: 2, maxBarThickness: 48 };
-  });
+    chs.forEach(s => { const src = dayBySrc[s]; for (let j = 0; j < src.length; j++) arr[bucketOfDay[j]] += src[j]; });
+    return arr;
+  };
+  const bar = { stack: 'a', borderRadius: 2, maxBarThickness: 48 };
+  let datasets;
+  if (S.stack === 'group') {
+    datasets = D.groups.map(g => ({ g, chs: g.idx.filter(c => S.src.has(c)) })).filter(x => x.chs.length)
+      .map(x => Object.assign({ label: x.g.name, data: bucket(x.chs), backgroundColor: x.g.color }, bar));
+  } else {
+    datasets = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c))
+      .map(c => Object.assign({ label: D.names[c], data: bucket([c]), backgroundColor: chColor(c) }, bar));
+  }
 
   const names = { day: '일별', week: '주간', month: '월별' };
   $('trendTitle').textContent = names[S.trend] + ' 유입 추이';
@@ -223,6 +541,7 @@ function renderTrend(dayBySrc) {
         y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
       },
       plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 12 } },
         tooltip: {
           filter: c => c.raw > 0,
           callbacks: {
@@ -267,7 +586,8 @@ function renderHour(hourC, noTime) {
 }
 
 function dimName(k) {
-  if (S.dim === 'source') return D.sources[k];
+  if (S.dim === 'source') return D.names[k];
+  if (S.dim === 'group') return k < 0 ? '(그룹 없음)' : D.groups[k].name;
   if (S.dim === 'note') return k < 0 ? '(비고 없음)' : D.notes[k];
   if (S.dim === 'platform') { const p = D.platforms[k]; return PLATFORM_NAMES[p] || p; }
   return D.campaigns[k];
@@ -276,7 +596,8 @@ function dimName(k) {
 function renderShare(dimC) {
   const items = [...dimC.entries()].sort((a, b) => b[1] - a[1]);
   const sum = items.reduce((a, x) => a + x[1], 0);
-  const colorOf = (k, rank) => S.dim === 'source' ? SRC_COLORS[k % SRC_COLORS.length]
+  const colorOf = (k, rank) => S.dim === 'source' ? chColor(k)
+    : S.dim === 'group' ? (k >= 0 ? D.groups[k].color : OTHER)
     : (S.dim === 'note' && k < 0) ? OTHER : (rank < TOP_N ? RANK_COLORS[rank] : OTHER);
 
   const top = items.slice(0, TOP_N);
@@ -291,26 +612,36 @@ function renderShare(dimC) {
   });
 
   const max = items.length ? items[0][1] : 1;
+  const sub = k => S.dim === 'group' && k >= 0 ? ` <span class="note">${esc(D.groups[k].idx.map(c => D.names[c]).join(', '))}</span>` : '';
   $('shareTable').innerHTML = '<thead><tr><th>항목</th><th>건수</th><th>비율</th><th class="bar"></th></tr></thead><tbody>' +
     (items.length ? items.map((x, r) => {
       const c = colorOf(x[0], r);
-      return `<tr><td class="name"><i style="background:${c}"></i>${esc(dimName(x[0]))}</td><td>${fmt(x[1])}</td><td>${pct(x[1], sum)}</td>` +
+      return `<tr><td class="name"><i style="background:${c}"></i>${esc(dimName(x[0]))}${sub(x[0])}</td><td>${fmt(x[1])}</td><td>${pct(x[1], sum)}</td>` +
         `<td class="bar"><div><span style="width:${(x[1] / max * 100).toFixed(1)}%;background:${c}"></span></div></td></tr>`;
     }).join('') : '<tr><td colspan="4" class="note">표시할 항목이 없습니다.</td></tr>') + '</tbody>';
 
   const notes = {
     source: '선택한 채널 기준 비율입니다.',
+    group: '주력1팀(G, H), 주력2팀(D, B, U), 지원군(그 외) 기준입니다.',
     note: '비고 칸의 값 그대로 묶었습니다. 표기가 조금만 달라도 별도 항목으로 잡혀요.',
-    platform: 'META 광고 컬럼이 있는 탭(GL(M))만 해당합니다.',
-    campaign: 'META 광고 컬럼이 있는 탭(GL(M))만 해당합니다.'
+    platform: 'META 광고 컬럼이 있는 탭(M)만 해당합니다.',
+    campaign: 'META 광고 컬럼이 있는 탭(M)만 해당합니다.'
   };
   $('shareNote').textContent = notes[S.dim] + ' 합계 ' + fmt(sum) + '건, 항목 ' + items.length + '개.';
 }
 
 function renderReport() {
-  $('reportTable').innerHTML = '<thead><tr><th>탭</th><th>인식</th><th>날짜 인식 실패</th><th>시간 없음</th><th>중복 연락처</th></tr></thead><tbody>' +
-    D.report.map(r => `<tr><td>${esc(r.name)}${r.missing ? ' (탭 없음)' : ''}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`).join('') +
-    '</tbody>';
+  $('reportTable').innerHTML = '<thead><tr><th>채널</th><th>그룹</th><th>인식</th><th>날짜 인식 실패</th><th>시간 없음</th><th>중복 연락처</th></tr></thead><tbody>' +
+    D.report.map(r => {
+      const c = D.sources.indexOf(r.name), g = c >= 0 ? D.groups[D.groupOf[c]] : null;
+      return `<tr><td>${esc(shortName(r.name))}${r.missing ? ' (탭 없음)' : ''}</td><td>${g ? esc(g.name) : '-'}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`;
+    }).join('') + '</tbody>';
 }
 
-load(false);
+/* ---------- 자동 갱신 ---------- */
+setInterval(() => { if (S.auto && D && document.visibilityState === 'visible') load(false, true); }, AUTO_REFRESH_MIN * 60000);
+document.addEventListener('visibilitychange', () => {
+  if (S.auto && D && document.visibilityState === 'visible' && Date.now() - lastLoad > AUTO_REFRESH_MIN * 60000) load(false, true);
+});
+
+load(false, false);

@@ -11,7 +11,7 @@
 <script src="config.js"></script>
 </head>
 <body>
-<div class="overlay" id="overlay"><div id="loadMsg">시트에서 데이터를 불러오는 중입니다…</div><div class="note">데이터가 많으면 10~20초 걸릴 수 있어요.</div></div>
+<div class="overlay" id="overlay"><div id="loadMsg">시트에서 데이터를 불러오는 중입니다…</div><div class="note">데이터가 많으면 10~40초 걸릴 수 있어요.</div></div>
 
 <div class="wrap">
   <header>
@@ -20,9 +20,25 @@
       <div class="sub" id="meta">-</div>
     </div>
     <div class="head-right">
+      <label class="toggle"><input type="checkbox" id="autoRefresh" checked> 5분마다 자동 갱신</label>
       <button class="btn" id="reload">최신 데이터로 새로고침</button>
     </div>
   </header>
+
+  <section class="card live" aria-label="오늘 마감 예측">
+    <div class="chead">
+      <h2>오늘 마감 예측</h2>
+      <span class="note" id="liveMeta"></span>
+    </div>
+    <p class="live-lead" id="liveLead"></p>
+    <div class="tbl live-tbl"><table id="liveTable"></table></div>
+    <div class="chead live-sub">
+      <h3 id="liveChartTitle">전체 시간대별 누적</h3>
+      <span class="note">표에서 행을 누르면 해당 그룹·채널로 바뀌어요</span>
+    </div>
+    <div class="cbox"><canvas id="liveChart"></canvas></div>
+    <p class="note method">최근 4주간 시간대별로 하루 DB가 쌓이는 패턴과 최근 7일 평균(요일 보정)을 함께 써서 예측해요. 하루가 지날수록 오늘 실제 페이스의 비중이 커집니다. 예상 범위는 최근 14일 동안 같은 시각에 같은 방식으로 예측했을 때의 평균 오차이고, 마감은 자정(24시) 기준이에요. 이 영역은 아래 기간·채널 필터와 상관없이 전체 데이터로 계산합니다.</p>
+  </section>
 
   <section class="filters" aria-label="필터">
     <div class="frow">
@@ -34,12 +50,12 @@
     </div>
     <div class="frow">
       <span class="flabel">채널</span>
-      <div class="chips" id="chips"></div>
+      <div class="chipgroups" id="chips"></div>
       <button class="linkbtn" id="allSrc">모두 선택</button>
     </div>
     <div class="frow">
       <span class="flabel">옵션</span>
-      <label class="toggle"><input type="checkbox" id="dedupe"> 같은 채널 내 중복 연락처 제외</label>
+      <label class="toggle"><input type="checkbox" id="dedupe"> 같은 채널 내 중복 연락처 제외 (예측에도 적용)</label>
     </div>
   </section>
 
@@ -57,8 +73,9 @@
     <section class="card full">
       <div class="chead">
         <h2 id="trendTitle">일별 유입 추이</h2>
-        <div class="seg" id="trendSeg">
-          <button data-v="day">일별</button><button data-v="week">주간</button><button data-v="month">월별</button>
+        <div class="seg-row">
+          <div class="seg" id="stackSeg"><button data-v="channel">채널별</button><button data-v="group">그룹별</button></div>
+          <div class="seg" id="trendSeg"><button data-v="day">일별</button><button data-v="week">주간</button><button data-v="month">월별</button></div>
         </div>
       </div>
       <div class="cbox tall"><canvas id="trendChart"></canvas></div>
@@ -79,7 +96,7 @@
       <div class="chead">
         <h2>항목별 비율</h2>
         <div class="seg" id="dimSeg">
-          <button data-v="source">채널</button><button data-v="note">비고</button><button data-v="platform">META 플랫폼</button><button data-v="campaign">META 캠페인</button>
+          <button data-v="source">채널</button><button data-v="group">그룹</button><button data-v="note">비고</button><button data-v="platform">META 플랫폼</button><button data-v="campaign">META 캠페인</button>
         </div>
       </div>
       <div class="share">
