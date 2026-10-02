@@ -592,15 +592,62 @@ function renderDow(dowC, total) {
 
 function renderHour(hourC, noTime) {
   const hTotal = hourC.reduce((a, b) => a + b, 0);
-  $('hourNote').textContent = noTime ? '시간 정보 없는 ' + fmt(noTime) + '건 제외' : '';
+  const t = D.asOf.t, fl = Math.floor(t);
+  // 현재 시각 이후(남은 시간)에 들어오는 비율: 현재 시간대는 남은 분만큼만 반영
+  const remCount = hourC.reduce((a, v, h) => a + (h > fl ? v : h === fl ? v * (fl + 1 - t) : 0), 0);
+  const remPct = hTotal ? remCount / hTotal * 100 : 0;
+  const remMin = Math.round((24 - t) * 60);
+  const remLabel = (remMin >= 60 ? Math.floor(remMin / 60) + '시간 ' : '') + (remMin % 60) + '분';
+  const peak = argmax(hourC);
+  $('hourNote').textContent = (noTime ? '시간 정보 없는 ' + fmt(noTime) + '건 제외, ' : '') + '선택 기간 합계 기준';
+
+  const colors = hourC.map((_, h) => h > fl ? '#2F5BD3' : h === fl ? '#7D9AE8' : '#C9D5F3');
+  const nowMark = {
+    id: 'nowMark',
+    afterDatasetsDraw(chart) {
+      if (!hTotal) return;
+      const xs = chart.scales.x, a = chart.chartArea, ctx = chart.ctx;
+      const step = xs.getPixelForValue(1) - xs.getPixelForValue(0);
+      const x = xs.getPixelForValue(fl) + (t - fl - 0.5) * step;
+      ctx.save();
+      ctx.strokeStyle = '#18212E'; ctx.globalAlpha = 0.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x, a.top); ctx.lineTo(x, a.bottom); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.setLineDash([]);
+      const l1 = '지금 ' + D.asOf.label + ' 이후', l2 = '하루의 ' + remPct.toFixed(1) + '%';
+      ctx.font = '600 13px Pretendard, sans-serif';
+      const w = Math.max(ctx.measureText(l2).width, (ctx.font = '500 11px Pretendard, sans-serif', ctx.measureText(l1).width)) + 16;
+      let bx = x - w - 6; if (bx < a.left) bx = Math.min(x + 6, a.right - w);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.strokeStyle = '#2F5BD3'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, a.top + 2, w, 40, 6) : ctx.rect(bx, a.top + 2, w, 40); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#5D6878'; ctx.font = '500 11px Pretendard, sans-serif'; ctx.fillText(l1, bx + 8, a.top + 18);
+      ctx.fillStyle = '#2F5BD3'; ctx.font = '700 13px Pretendard, sans-serif'; ctx.fillText(l2, bx + 8, a.top + 35);
+      ctx.restore();
+    }
+  };
   draw('hourChart', {
     type: 'bar',
-    data: { labels: hourC.map((_, h) => h + '시'), datasets: [{ data: hourC, backgroundColor: barColors(hourC), borderRadius: 2 }] },
+    data: {
+      labels: hourC.map((_, h) => h + '시'),
+      datasets: [{ data: hourC, backgroundColor: colors, borderRadius: 2}]
+    },
     options: {
-      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, ticks: { precision: 0 } } },
-      plugins: { tooltip: { callbacks: { title: i => i[0].dataIndex + ':00 ~ ' + i[0].dataIndex + ':59', label: c => ' ' + fmt(c.raw) + '건 (' + pct(c.raw, hTotal) + ')' } } }
-    }
+      layout: { padding: { top: 6 } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, grace: '18%', ticks: { precision: 0 } } },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: i => i[0].dataIndex + ':00 ~ ' + i[0].dataIndex + ':59' + (i[0].dataIndex === peak ? ' (피크)' : ''),
+            label: c => ' ' + fmt(c.raw) + '건 (' + pct(c.raw, hTotal) + ')',
+            footer: i => { const h = i[0].dataIndex; return h + '시~24시 합계 ' + pct(hourC.slice(h).reduce((a, b) => a + b, 0), hTotal); }
+          }
+        }
+      }
+    },
+    plugins: [nowMark]
   });
+  $('hourSummary').innerHTML = hTotal
+    ? `${D.asOf.label} 기준 마감까지 남은 <b>${remLabel}</b> 동안 평소 하루 DB의 <b class="hl">${remPct.toFixed(1)}%</b>가 들어와요. 지금까지의 시간대가 ${(100 - remPct).toFixed(1)}%를 차지합니다.`
+    : '';
 }
 
 function dimName(k) {

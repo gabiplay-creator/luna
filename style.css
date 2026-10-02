@@ -188,3 +188,8 @@ td.name { word-break: keep-all; overflow-wrap: anywhere; }
   .live-tbl table { width: 100%; }
   .live-tbl .m { letter-spacing: -0.02em; }
 }
+
+/* ---------- v6: 시간대별 남은 시간 비율 ---------- */
+.hour-sum { margin: 10px 0 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.hour-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.hour-sum .hl { color: var(--accent); }
