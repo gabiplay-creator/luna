@@ -11,7 +11,8 @@ const GROUPS = [
   { id: 'support', name: '지원군', army: '지원군', members: null, color: '#E2612E' } // null = 위에 없는 나머지 전부
 ];
 const CHANNEL_COLORS = { G: '#2F5BD3', H: '#86A2F2', D: '#0E8F72', B: '#3DBB93', U: '#9AD9C1', M: '#E2612E', T: '#F0A83A' };
-const EXTRA_COLORS = ['#9C4DCC', '#4C6A92', '#B5651D', '#7A8B2E'];
+// 새로 인식된 채널(자동으로 지원군)에 차례로 쓰는 색
+const EXTRA_COLORS = ['#C2417A', '#B5651D', '#D98C5F', '#9E7B2F', '#E07A9E', '#8C5A3C', '#CC5A3A', '#B89A3E'];
 const AUTO_REFRESH_MIN = 5;
 const FC = { profileDays: 28, levelDays: 7, weekdayDays: 56, backtestDays: 14, shrink: 200, window: 100 };
 
@@ -30,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set() };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -45,7 +46,12 @@ const dowOf = d => (d + 3) % 7; // 0=월 … 6=일
 const fmtDay = d => { const t = new Date(d * 864e5); return t.getUTCFullYear() + '.' + pad(t.getUTCMonth() + 1) + '.' + pad(t.getUTCDate()); };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const shortName = s => { const m = String(s).match(/^GL\s*[\(\[]\s*(.+?)\s*[\)\]]$/i); return m ? m[1] : String(s); };
-const chColor = c => CHANNEL_COLORS[D.names[c]] || EXTRA_COLORS[c % EXTRA_COLORS.length];
+const chColor = c => {
+  const n = D.names[c];
+  if (CHANNEL_COLORS[n]) return CHANNEL_COLORS[n];
+  const extras = D.names.filter(x => !CHANNEL_COLORS[x]);
+  return EXTRA_COLORS[extras.indexOf(n) % EXTRA_COLORS.length];
+};
 
 /* ---------- 데이터 불러오기 ---------- */
 let loading = false;
@@ -102,6 +108,8 @@ function onData(raw) {
     if (A.day[i] > max) max = A.day[i];
   }
   const first = !D;
+  const prevNames = D ? D.names : [];
+  const prevSel = D ? new Set([...S.src].map(i => D.names[i])) : null;
   lastLoad = Date.now();
   D = Object.assign(raw, { A: A, n: n, min: n ? min : 0, max: n ? max : 0 });
   D.names = D.sources.map(shortName);
@@ -111,11 +119,15 @@ function onData(raw) {
   parseAsOf();
   D.max = Math.max(D.max, D.asOf.day);
 
-  if (first) { S.src = new Set(D.names.map((_, i) => i)); }
+  // 선택 상태는 채널 이름 기준으로 유지하고, 새로 생긴 채널은 켜진 상태로 추가
+  D.newNames = first ? [] : D.names.filter(nm => prevNames.indexOf(nm) < 0);
+  S.src = new Set(D.names.map((nm, i) => i).filter(i => first || prevSel.has(D.names[i]) || prevNames.indexOf(D.names[i]) < 0));
+  if (!D.hier.some(r => r.key === S.liveKey)) S.liveKey = 'all';
   buildChips();
   applyPreset(S.preset);
   renderLive();
-  $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max);
+  $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
+    (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
   $('overlay').classList.add('hidden');
 }
@@ -155,10 +167,11 @@ function setupGroups() {
     const ch = teams.flatMap(t => t.idx);
     if (!ch.length) return;
     const single = teams.length === 1 && teams[0].name === army;
-    H.push({ key: 'army:' + army, lv: 1, name: army, ch: ch, color: single ? teams[0].color : null });
+    H.push({ key: 'army:' + army, lv: 1, name: army, ch: ch, color: single ? teams[0].color : null, kids: single });
     teams.forEach(t => {
-      if (!single) H.push({ key: 'team:' + t.id, lv: 2, name: t.name, ch: t.idx, color: t.color });
-      t.idx.forEach(c => H.push({ key: 'ch:' + c, lv: 3, name: D.names[c], ch: [c], color: chColor(c) }));
+      const parent = single ? 'army:' + army : 'team:' + t.id;
+      if (!single) H.push({ key: parent, lv: 2, name: t.name, ch: t.idx, color: t.color, kids: true });
+      t.idx.forEach(c => H.push({ key: 'ch:' + D.names[c], lv: 3, name: D.names[c], ch: [c], color: chColor(c), parent: parent }));
     });
   });
   D.hier = H;
@@ -223,7 +236,9 @@ $('reload').addEventListener('click', () => load(true, false));
 $('autoRefresh').addEventListener('change', e => { S.auto = e.target.checked; });
 $('liveTable').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-key]'); if (!tr) return;
-  S.liveKey = tr.dataset.key; renderLive();
+  const key = tr.dataset.key;
+  if (tr.dataset.kids === '1') { if (S.open.has(key)) S.open.delete(key); else S.open.add(key); }
+  S.liveKey = key; renderLive();
 });
 
 /* =========================================================
@@ -381,12 +396,15 @@ function renderLive() {
   };
   $('liveTable').innerHTML =
     '<thead><tr><th>구분</th><th>현재</th><th class="prog">진행</th><th>오늘 예측</th><th>예상 범위</th><th>남은 예상</th><th>어제 같은 시각</th><th>어제 마감</th><th>내일 예측</th></tr></thead><tbody>' +
-    rows.map(r => {
+    rows.filter(r => !r.parent || S.open.has(r.parent)).map(r => {
       const s = r.st;
       const rg = s.err != null ? `${fmt(Math.max(s.so, s.fc * (1 - s.err)))}~${fmt(s.fc * (1 + s.err))}` : '-';
       const dot = r.color ? `<i style="background:${r.color}"></i>` : '';
-      return `<tr class="lv${r.lv}${r.key === S.liveKey ? ' sel' : ''}" data-key="${esc(r.key)}">` +
-        `<td class="name">${dot}${esc(r.name)}</td>` +
+      const isOpen = S.open.has(r.key);
+      const caret = r.kids ? `<span class="caret${isOpen ? ' open' : ''}" aria-hidden="true">▸</span>` : '';
+      return `<tr class="lv${r.lv}${r.key === S.liveKey ? ' sel' : ''}${r.kids ? ' parent' : ''}" data-key="${esc(r.key)}"` +
+        (r.kids ? ` data-kids="1" aria-expanded="${isOpen}" title="눌러서 채널 ${isOpen ? '접기' : '펼치기'}"` : '') + '>' +
+        `<td class="name">${caret}${dot}${esc(r.name)}</td>` +
         `<td>${fmt(s.so)}</td>` +
         `<td class="prog"><div><span style="width:${s.fc ? clamp(s.so / s.fc * 100, 0, 100).toFixed(0) : 0}%"></span></div></td>` +
         `<td class="fc">${fmt(s.fc)}</td>` +
@@ -622,10 +640,10 @@ function renderShare(dimC) {
 
   const notes = {
     source: '선택한 채널 기준 비율입니다.',
-    group: '주력1팀(G, H), 주력2팀(D, B, U), 지원군(그 외) 기준입니다.',
+    group: D.groups.filter(g => g.idx.length).map(g => g.name + '(' + g.idx.map(c => D.names[c]).join(', ') + ')').join(', ') + ' 기준입니다.',
     note: '비고 칸의 값 그대로 묶었습니다. 표기가 조금만 달라도 별도 항목으로 잡혀요.',
-    platform: 'META 광고 컬럼이 있는 탭(M)만 해당합니다.',
-    campaign: 'META 광고 컬럼이 있는 탭(M)만 해당합니다.'
+    platform: 'META 광고 컬럼(platform)이 있는 탭만 해당합니다.',
+    campaign: 'META 광고 컬럼(campaign_name)이 있는 탭만 해당합니다.'
   };
   $('shareNote').textContent = notes[S.dim] + ' 합계 ' + fmt(sum) + '건, 항목 ' + items.length + '개.';
 }
@@ -634,7 +652,8 @@ function renderReport() {
   $('reportTable').innerHTML = '<thead><tr><th>채널</th><th>그룹</th><th>인식</th><th>날짜 인식 실패</th><th>시간 없음</th><th>중복 연락처</th></tr></thead><tbody>' +
     D.report.map(r => {
       const c = D.sources.indexOf(r.name), g = c >= 0 ? D.groups[D.groupOf[c]] : null;
-      return `<tr><td>${esc(shortName(r.name))}${r.missing ? ' (탭 없음)' : ''}</td><td>${g ? esc(g.name) : '-'}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`;
+      const auto = c >= 0 && !CHANNEL_COLORS[D.names[c]] ? ' (자동 인식)' : '';
+      return `<tr><td>${esc(shortName(r.name))}${r.missing ? ' (탭 없음)' : ''}${auto}</td><td>${g ? esc(g.name) : '-'}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`;
     }).join('') + '</tbody>';
 }
 
