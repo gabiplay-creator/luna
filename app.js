@@ -395,7 +395,7 @@ function renderLive() {
     return `<span class="delta ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>`;
   };
   $('liveTable').innerHTML =
-    '<thead><tr><th>구분</th><th>현재</th><th class="prog">진행</th><th>오늘 예측</th><th>예상 범위</th><th>남은 예상</th><th>어제 같은 시각</th><th>어제 마감</th><th>내일 예측</th></tr></thead><tbody>' +
+    '<thead><tr><th>구분</th><th>현재</th><th class="prog">진행</th><th>오늘 예측</th><th class="x">예상 범위</th><th class="x">남은 예상</th><th class="x">어제 같은 시각</th><th class="x">어제 마감</th><th>내일 예측</th></tr></thead><tbody>' +
     rows.filter(r => !r.parent || S.open.has(r.parent)).map(r => {
       const s = r.st;
       const rg = s.err != null ? `${fmt(Math.max(s.so, s.fc * (1 - s.err)))}~${fmt(s.fc * (1 + s.err))}` : '-';
@@ -405,14 +405,14 @@ function renderLive() {
       return `<tr class="lv${r.lv}${r.key === S.liveKey ? ' sel' : ''}${r.kids ? ' parent' : ''}" data-key="${esc(r.key)}"` +
         (r.kids ? ` data-kids="1" aria-expanded="${isOpen}" title="눌러서 채널 ${isOpen ? '접기' : '펼치기'}"` : '') + '>' +
         `<td class="name">${caret}${dot}${esc(r.name)}</td>` +
-        `<td>${fmt(s.so)}</td>` +
+        `<td>${fmt(s.so)}<span class="m">어제 ${fmt(s.yAt)}${delta(s.so, s.yAt)}</span></td>` +
         `<td class="prog"><div><span style="width:${s.fc ? clamp(s.so / s.fc * 100, 0, 100).toFixed(0) : 0}%"></span></div></td>` +
-        `<td class="fc">${fmt(s.fc)}</td>` +
-        `<td class="dim" title="${s.err != null ? '최근 14일 같은 시각 예측의 평균 오차 ±' + (s.err * 100).toFixed(0) + '%' : '데이터가 부족해 범위를 계산하지 않았어요'}">${rg}</td>` +
-        `<td>+${fmt(s.rem)}</td>` +
-        `<td>${fmt(s.yAt)}${delta(s.so, s.yAt)}</td>` +
-        `<td class="dim">${fmt(s.yTotal)}</td>` +
-        `<td>${fmt(s.tomorrow)}</td></tr>`;
+        `<td class="fc">${fmt(s.fc)}<span class="m">${rg === '-' ? '' : rg}</span></td>` +
+        `<td class="dim x" title="${s.err != null ? '최근 14일 같은 시각 예측의 평균 오차 ±' + (s.err * 100).toFixed(0) + '%' : '데이터가 부족해 범위를 계산하지 않았어요'}">${rg}</td>` +
+        `<td class="x">+${fmt(s.rem)}</td>` +
+        `<td class="x">${fmt(s.yAt)}${delta(s.so, s.yAt)}</td>` +
+        `<td class="dim x">${fmt(s.yTotal)}</td>` +
+        `<td>${fmt(s.tomorrow)}<span class="m">어제 마감 ${fmt(s.yTotal)}</span></td></tr>`;
     }).join('') + '</tbody>';
 
   const sel = rows.find(r => r.key === S.liveKey) || rows[0];

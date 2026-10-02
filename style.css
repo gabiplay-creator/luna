@@ -121,3 +121,70 @@ h3 { font-size: 14px; font-weight: 650; margin: 0; }
 .live-tbl tr.lv2 td:first-child { padding-left: 24px; }
 .live-tbl tr.lv3 td:first-child { padding-left: 60px; }
 @media (prefers-reduced-motion: reduce) { .live-tbl .caret { transition: none; } }
+
+/* ---------- v5: 모바일 최적화 ---------- */
+.live-tbl td.name { white-space: nowrap; word-break: normal; }
+td.name { word-break: keep-all; overflow-wrap: anywhere; }
+.live-tbl .m { display: none; }
+
+@media (max-width: 720px) {
+  body { font-size: 13px; }
+  .wrap { padding: 14px 12px 36px; }
+  header { margin-bottom: 12px; }
+  h1 { font-size: 19px; }
+  .sub { font-size: 12px; }
+  .head-right { width: 100%; justify-content: space-between; }
+  .card { padding: 14px 12px; border-radius: 10px; }
+  .grid { gap: 12px; }
+  .chead { margin-bottom: 8px; }
+
+  /* 오늘 마감 예측 */
+  .live-lead { font-size: 15px; line-height: 1.65; margin-bottom: 12px; }
+  .tbl.live-tbl { margin: 0 -12px 14px; overflow: visible; max-height: none; }
+  .live-tbl table { table-layout: auto; }
+  .live-tbl .x, .live-tbl .prog { display: none; }
+  .live-tbl th, .live-tbl td { padding: 9px 8px; vertical-align: top; }
+  .live-tbl th:first-child, .live-tbl td:first-child { padding-left: 12px; }
+  .live-tbl th:last-child, .live-tbl td:last-child { padding-right: 12px; }
+  .live-tbl td { font-size: 14px; }
+  .live-tbl .m { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 1px; white-space: nowrap; }
+  .live-tbl .m .delta { margin-left: 2px; }
+  .live-tbl tr.lv1.parent td:first-child { padding-left: 8px; }
+  .live-tbl tr.lv2 td:first-child { padding-left: 14px; }
+  .live-tbl tr.lv3 td:first-child { padding-left: 34px; }
+  .live-tbl .caret { width: 12px; margin-right: 2px; }
+  td.name i { margin-right: 5px; }
+  .cbox { height: 230px; }
+  .cbox.tall { height: 260px; }
+  .method { font-size: 12px; }
+
+  /* 필터 */
+  .filters { padding: 12px; gap: 10px; }
+  .frow { gap: 6px 8px; }
+  .flabel { width: 100%; }
+  input[type=date] { flex: 1 1 120px; min-width: 0; }
+  #presets { width: 100%; }
+  #presets button { flex: 1; padding: 7px 4px; }
+  .seg button { padding: 6px 9px; }
+  .chipgroups { gap: 8px 12px; }
+  .chip { padding: 5px 10px 5px 8px; }
+
+  /* 요약 숫자 */
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpis .kpi:last-child { grid-column: 1 / -1; }
+  .kpi { padding: 12px; }
+  .kpi .v { font-size: 20px; }
+
+  /* 추이·비율 */
+  .seg-row { width: 100%; }
+  #dimSeg { display: flex; flex-wrap: wrap; width: 100%; border-radius: 8px; }
+  #dimSeg button { flex: 1 1 auto; border-bottom: 1px solid var(--line); }
+  .share { gap: 12px; }
+  .share .cbox { height: 220px; }
+  .tbl { max-height: 360px; }
+  th, td { padding: 7px 6px; }
+}
+@media (max-width: 720px) {
+  .live-tbl table { width: 100%; }
+  .live-tbl .m { letter-spacing: -0.02em; }
+}
