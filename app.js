@@ -34,7 +34,7 @@ async function load(force) {
   $('loadMsg').className = '';
   $('loadMsg').textContent = '시트에서 데이터를 불러오는 중입니다…';
   if (!CFG.API_URL || CFG.API_URL.indexOf('script.google.com') < 0) {
-    onErr(new Error('assets/config.js 파일의 API_URL에 Apps Script 웹 앱 주소를 넣어 주세요.'));
+    onErr(new Error('config.js 파일의 API_URL에 Apps Script 웹 앱 주소를 넣어 주세요.'));
     return;
   }
   try {
