@@ -193,3 +193,26 @@ td.name { word-break: keep-all; overflow-wrap: anywhere; }
 .hour-sum { margin: 10px 0 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
 .hour-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .hour-sum .hl { color: var(--accent); }
+
+/* ---------- v7: 시간대별 유입률·증감 ---------- */
+.strip { overflow-x: auto; margin: 14px 0 6px; -webkit-overflow-scrolling: touch; }
+.strip table { min-width: 860px; table-layout: fixed; border-collapse: separate; border-spacing: 2px; }
+.strip th, .strip td { padding: 6px 2px; border: 0; text-align: center; font-size: 12px; white-space: nowrap; }
+.strip thead th { color: var(--muted); font-weight: 500; position: static; background: none; }
+.strip th:first-child { width: 92px; text-align: left; padding-left: 4px; position: sticky; left: 0; background: var(--panel); z-index: 1; font-weight: 600; font-size: 12.5px; }
+.strip tbody th i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.strip tbody th .sub { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; margin-left: 13px; }
+.strip td.hc { border-radius: 4px; font-variant-numeric: tabular-nums; }
+#cmpStrip tbody tr { cursor: pointer; }
+#cmpStrip tbody tr.sel th { color: var(--accent); }
+#cmpStrip tbody tr.sel th::before { content: '▸ '; }
+.cmp-lead { font-size: 15px; line-height: 1.7; margin: 2px 0 12px; }
+.cmp-lead b { font-variant-numeric: tabular-nums; }
+.up { color: #0E8F72; } .down { color: #C2413A; }
+@media (max-width: 720px) {
+  .strip { margin: 12px -12px 6px; padding: 0 12px; }
+  .strip th:first-child { width: 72px; font-size: 12px; }
+  .cmp-lead { font-size: 14px; }
+  #cmpBaseSeg, #cmpMetricSeg { flex: 1 1 auto; }
+  #cmpBaseSeg button, #cmpMetricSeg button { flex: 1; }
+}

@@ -94,6 +94,27 @@
     </section>
 
     <section class="card full">
+      <div class="chead"><h2>시간대별 유입률</h2><span class="note" id="rateNote"></span></div>
+      <div class="cbox"><canvas id="rateChart"></canvas></div>
+      <div class="strip"><table id="rateStrip"></table></div>
+      <p class="note">각 기준에서 하루 유입 중 그 시간대가 차지하는 비율(%)이에요. 색이 진할수록 그 기준 안에서 비중이 큰 시간대입니다. 위쪽 채널 필터와 중복 제외 옵션이 적용돼요.</p>
+    </section>
+
+    <section class="card full">
+      <div class="chead">
+        <h2>어제 시간대별 증감</h2>
+        <div class="seg-row">
+          <div class="seg" id="cmpBaseSeg"><button data-v="month">한달 평균</button><button data-v="week">주간 평균</button><button data-v="yy">전전일</button></div>
+          <div class="seg" id="cmpMetricSeg"><button data-v="share">비중 %p</button><button data-v="count">건수 %</button></div>
+        </div>
+      </div>
+      <p class="cmp-lead" id="cmpLead"></p>
+      <div class="cbox"><canvas id="cmpChart"></canvas></div>
+      <div class="strip"><table id="cmpStrip"></table></div>
+      <p class="note" id="cmpNote"></p>
+    </section>
+
+    <section class="card full">
       <div class="chead">
         <h2>항목별 비율</h2>
         <div class="seg" id="dimSeg">

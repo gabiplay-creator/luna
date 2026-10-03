@@ -31,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set() };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share' };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -204,6 +204,8 @@ function syncControls() {
   press('#trendSeg button', 'v', S.trend);
   press('#stackSeg button', 'v', S.stack);
   press('#dimSeg button', 'v', S.dim);
+  press('#cmpBaseSeg button', 'v', S.cmpBase);
+  press('#cmpMetricSeg button', 'v', S.cmpMetric);
   document.querySelectorAll('#chips .chip').forEach(b => b.setAttribute('aria-pressed', String(S.src.has(+b.dataset.i))));
 }
 
@@ -232,6 +234,8 @@ $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i)
 $('dedupe').addEventListener('change', e => { S.dedupe = e.target.checked; render(); renderLive(); });
 const segHandler = (id, key) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S[key] = b.dataset.v; syncControls(); render(); } });
 segHandler('trendSeg', 'trend'); segHandler('stackSeg', 'stack'); segHandler('dimSeg', 'dim');
+segHandler('cmpBaseSeg', 'cmpBase'); segHandler('cmpMetricSeg', 'cmpMetric');
+$('cmpStrip').addEventListener('click', e => { const tr = e.target.closest('tr[data-base]'); if (tr) { S.cmpBase = tr.dataset.base; syncControls(); render(); } });
 $('reload').addEventListener('click', () => load(true, false));
 $('autoRefresh').addEventListener('change', e => { S.auto = e.target.checked; });
 $('liveTable').addEventListener('click', e => {
@@ -490,6 +494,7 @@ function render() {
   renderDow(dowC, total);
   renderHour(hourC, noTime);
   renderShare(dimC);
+  renderHourCompare();
 }
 
 function argmax(arr) { let m = -1, k = -1; arr.forEach((v, i) => { if (v > m) { m = v; k = i; } }); return k; }
@@ -702,6 +707,139 @@ function renderReport() {
       const auto = c >= 0 && !CHANNEL_COLORS[D.names[c]] ? ' (자동 인식)' : '';
       return `<tr><td>${esc(shortName(r.name))}${r.missing ? ' (탭 없음)' : ''}${auto}</td><td>${g ? esc(g.name) : '-'}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`;
     }).join('') + '</tbody>';
+}
+
+
+/* =========================================================
+ * 시간대별 유입률 · 어제 증감 비교 (채널 필터 적용, 기간은 어제 기준 고정)
+ * ========================================================= */
+const BASES = {
+  all: { name: '전체', color: '#A3AEBD' },
+  month: { name: '한달', color: '#86A2F2' },
+  week: { name: '주간', color: '#2F5BD3' },
+  y: { name: '어제', color: '#E2612E' },
+  yy: { name: '전전일', color: '#8C5A3C' }
+};
+const CMP_NAMES = { month: '한달 평균', week: '주간 평균', yy: '전전일' };
+
+function hourBases() {
+  const Y = D.asOf.day - 1, A = D.A;
+  const win = { all: [D.min, Y], month: [Y - 30, Y - 1], week: [Y - 7, Y - 1], y: [Y, Y], yy: [Y - 1, Y - 1] };
+  const keys = Object.keys(win), cnt = {}, tot = {}, days = {}, share = {};
+  keys.forEach(k => { cnt[k] = new Array(24).fill(0); });
+  for (let i = 0; i < D.n; i++) {
+    const h = A.hour[i]; if (h < 0) continue;
+    if (!S.src.has(A.src[i])) continue;
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i]; if (d > Y) continue;
+    for (const k of keys) if (d >= win[k][0] && d <= win[k][1]) cnt[k][h]++;
+  }
+  keys.forEach(k => {
+    tot[k] = cnt[k].reduce((a, b) => a + b, 0);
+    days[k] = Math.max(1, win[k][1] - Math.max(win[k][0], D.min) + 1);
+    share[k] = cnt[k].map(v => tot[k] ? v / tot[k] * 100 : null);
+  });
+  return { Y, win, cnt, tot, days, share };
+}
+
+function heatCell(v, maxAbs, txt, rgb) {
+  if (v == null || !isFinite(v)) return '<td class="hc">-</td>';
+  const a = maxAbs ? Math.min(1, Math.abs(v) / maxAbs) * 0.82 + 0.06 : 0.06;
+  const col = rgb || (v >= 0 ? '14,143,114' : '194,65,58');
+  return `<td class="hc" style="background:rgba(${col},${a.toFixed(2)});color:${a > 0.5 ? '#fff' : 'var(--ink)'}">${txt}</td>`;
+}
+
+function renderHourCompare() {
+  const B = hourBases();
+  const yLabel = fmtDay(B.Y).slice(5) + ' ' + DOW[dowOf(B.Y)];
+  const hours = [...Array(24).keys()];
+  const hdr = '<thead><tr><th>기준</th>' + hours.map(h => `<th>${h}시</th>`).join('') + '</tr></thead>';
+
+  /* ---- 유입률 ---- */
+  $('rateNote').textContent = `어제(${yLabel}) 기준, 한달·주간은 어제를 뺀 직전 30일·7일`;
+  draw('rateChart', {
+    type: 'line',
+    data: {
+      labels: hours.map(h => h + '시'),
+      datasets: ['all', 'month', 'week', 'y'].map(k => ({
+        label: BASES[k].name + (k === 'y' ? '' : ''), data: B.share[k], borderColor: BASES[k].color, backgroundColor: BASES[k].color,
+        borderWidth: k === 'y' ? 3 : 1.8, borderDash: k === 'all' ? [4, 3] : [], pointRadius: 0, pointHoverRadius: 4, tension: 0.25
+      }))
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, ticks: { callback: v => v + '%' } } },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 14, boxHeight: 2, padding: 14 } },
+        tooltip: { callbacks: { title: i => i[0].dataIndex + ':00 ~ ' + i[0].dataIndex + ':59', label: c => ' ' + c.dataset.label + ': ' + (c.raw == null ? '-' : c.raw.toFixed(1) + '%') } }
+      }
+    }
+  });
+  $('rateStrip').innerHTML = hdr + '<tbody>' + ['all', 'month', 'week', 'y'].map(k => {
+    const vals = B.share[k].filter(v => v != null), mn = Math.min(...vals), mx = Math.max(...vals);
+    return `<tr><th><i style="background:${BASES[k].color}"></i>${BASES[k].name}<span class="sub">${fmt(B.tot[k])}건</span></th>` +
+      B.share[k].map(v => heatCell(v == null ? null : v - mn, mx - mn, v == null ? '-' : v.toFixed(1), '47,91,211')).join('') + '</tr>';
+  }).join('') + '</tbody>';
+
+  /* ---- 어제 증감 ---- */
+  const isShare = S.cmpMetric === 'share';
+  const diffOf = (base, h) => {
+    if (isShare) { const a = B.share.y[h], b = B.share[base][h]; return a == null || b == null ? null : a - b; }
+    const avg = B.cnt[base][h] / B.days[base];
+    return avg > 0 ? (B.cnt.y[h] - avg) / avg * 100 : null;
+  };
+  const unit = isShare ? '%p' : '%';
+  const sign = v => (Math.abs(v) < 0.05 ? '' : v > 0 ? '+' : '') + (Math.abs(v) < 0.05 ? '0.0' : v.toFixed(1));
+  const diffs = hours.map(h => diffOf(S.cmpBase, h));
+  const baseAvgDay = B.tot[S.cmpBase] / B.days[S.cmpBase];
+
+  const valid = hours.filter(h => diffs[h] != null);
+  const ups = valid.filter(h => diffs[h] > 0).sort((a, b) => diffs[b] - diffs[a]).slice(0, 3);
+  const downs = valid.filter(h => diffs[h] < 0).sort((a, b) => diffs[a] - diffs[b]).slice(0, 3);
+  const list = arr => arr.map(h => `${h}시 <b class="${diffs[h] >= 0 ? 'up' : 'down'}">${sign(diffs[h])}${unit}</b>`).join(', ');
+  const volDiff = baseAvgDay ? (B.tot.y - baseAvgDay) / baseAvgDay * 100 : null;
+  const what = isShare ? '유입 비중이' : '유입 건수가';
+  $('cmpLead').innerHTML = !B.tot.y ? '어제 데이터가 없어요.' :
+    `어제(${yLabel})는 총 <b>${fmt(B.tot.y)}건</b>으로 ${CMP_NAMES[S.cmpBase]}(${fmt(baseAvgDay)}건)보다 ` +
+    (volDiff == null ? '' : `<b class="${volDiff >= 0 ? 'up' : 'down'}">${sign(volDiff)}%</b> ${volDiff >= 0 ? '많았어요' : '적었어요'}. `) +
+    (ups.length ? `${what} 늘어난 시간대는 ${list(ups)}` : `${what} 늘어난 시간대는 없고`) +
+    (downs.length ? `${ups.length ? '이고, ' : ', '}줄어든 시간대는 ${list(downs)}예요.` : '예요.');
+
+  draw('cmpChart', {
+    type: 'bar',
+    data: { labels: hours.map(h => h + '시'), datasets: [{ data: diffs, backgroundColor: diffs.map(v => v == null ? OTHER : v >= 0 ? '#0E8F72' : '#C2413A'), borderRadius: 2 }] },
+    options: {
+      scales: {
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+        y: { ticks: { callback: v => (v > 0 ? '+' : '') + v + unit }, grid: { color: c => c.tick.value === 0 ? '#9AA5B4' : '#E7ECF2' } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: i => i[0].dataIndex + ':00 ~ ' + i[0].dataIndex + ':59',
+            label: c => {
+              const h = c.dataIndex;
+              if (c.raw == null) return ' 비교할 데이터가 없어요';
+              return isShare
+                ? [` 어제 ${B.share.y[h].toFixed(1)}%, ${CMP_NAMES[S.cmpBase]} ${B.share[S.cmpBase][h].toFixed(1)}%`, ` 차이 ${sign(c.raw)}%p`]
+                : [` 어제 ${fmt(B.cnt.y[h])}건, ${CMP_NAMES[S.cmpBase]} ${(B.cnt[S.cmpBase][h] / B.days[S.cmpBase]).toFixed(1)}건`, ` 증감 ${sign(c.raw)}%`];
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const all3 = ['month', 'week', 'yy'].map(k => hours.map(h => diffOf(k, h)));
+  const cap = isShare ? 2 : 60; // 색 농도 기준 (이 이상이면 가장 진하게)
+  const maxAbs = Math.min(cap, Math.max(0.1, ...all3.flat().filter(v => v != null).map(Math.abs)));
+  $('cmpStrip').innerHTML = hdr.replace('기준', '어제 대비') + '<tbody>' + ['month', 'week', 'yy'].map((k, r) =>
+    `<tr data-base="${k}" class="${k === S.cmpBase ? 'sel' : ''}"><th>${CMP_NAMES[k]}</th>` +
+    all3[r].map(v => heatCell(v, maxAbs, v == null ? '-' : isShare ? sign(v) : (Math.round(v) > 0 ? '+' : '') + Math.round(v))).join('') + '</tr>'
+  ).join('') + '</tbody>';
+  $('cmpNote').textContent = isShare
+    ? '유입 비중 차이(%p): 하루 중 그 시간대가 차지하는 비율이 비교 기준보다 몇 %p 높거나 낮은지예요. 전체 양과 상관없이 패턴 변화만 봅니다.'
+    : '건수 증감(%): 어제 그 시간대 건수가 비교 기준의 하루 평균 건수보다 몇 % 많거나 적은지예요. 새벽처럼 건수가 적은 시간대는 변동이 크게 나올 수 있어요.';
 }
 
 /* ---------- 자동 갱신 ---------- */
