@@ -113,6 +113,7 @@ function onData(raw) {
   lastLoad = Date.now();
   D = Object.assign(raw, { A: A, n: n, min: n ? min : 0, max: n ? max : 0 });
   D.names = D.sources.map(shortName);
+  parseSpend();
   D.firstDay = D.names.map(() => Infinity);
   for (let i = 0; i < n; i++) if (A.day[i] < D.firstDay[A.src[i]]) D.firstDay[A.src[i]] = A.day[i];
   setupGroups();
@@ -126,6 +127,7 @@ function onData(raw) {
   buildChips();
   applyPreset(S.preset);
   renderLive();
+  renderSpend();
   $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
     (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
@@ -234,7 +236,7 @@ $('chips').addEventListener('click', e => {
   syncControls(); render();
 });
 $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
-function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderRank(); }
+function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); }
 $('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
 $('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
 $('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
@@ -257,11 +259,17 @@ segHandler('cmpBaseSeg', 'cmpBase'); segHandler('cmpMetricSeg', 'cmpMetric');
 $('cmpStrip').addEventListener('click', e => { const tr = e.target.closest('tr[data-base]'); if (tr) { S.cmpBase = tr.dataset.base; syncControls(); render(); } });
 $('reload').addEventListener('click', () => load(true, false));
 $('autoRefresh').addEventListener('change', e => { S.auto = e.target.checked; });
+$('spendTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-kids="1"]'); if (!tr) return;
+  const key = tr.dataset.key;
+  if (S.open.has(key)) S.open.delete(key); else S.open.add(key);
+  renderLive(); renderSpend();
+});
 $('liveTable').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-key]'); if (!tr) return;
   const key = tr.dataset.key;
   if (tr.dataset.kids === '1') { if (S.open.has(key)) S.open.delete(key); else S.open.add(key); }
-  S.liveKey = key; renderLive();
+  S.liveKey = key; renderLive(); renderSpend();
 });
 
 /* =========================================================
@@ -510,6 +518,7 @@ function render() {
   $('empty').style.display = total ? 'none' : 'block';
   renderKpis(total, days, hourC, dowC, dupSeen);
   renderTrend(dayBySrc);
+  renderSpendTrend(dayBySrc);
   renderDow(dowC, total);
   renderHour(hourC, noTime);
   renderShare(dimC);
@@ -950,6 +959,139 @@ function renderRank() {
     `<div class="rec-a">평균 ${r.avg >= 10 ? fmt(r.avg) : r.avg.toFixed(1)}건의 ${(r.n / Math.max(r.avg, 1e-9)).toFixed(1)}배</div></div>`;
   $('records').innerHTML = recCard('역대 최고의 날', recs.day) + recCard('최고의 달', recs.month) + recCard('최고의 주', recs.week) + recCard('최고의 1시간', recs.hour);
   $('rankLegend').innerHTML = parts.length > 1 ? '막대 구성 ' + parts.map(p => `<span><i style="background:${p.color}"></i>${esc(p.name)}</span>`).join('') : '';
+}
+
+
+/* =========================================================
+ * 광고비 · CPA
+ * ========================================================= */
+const wonShort = n => n >= 1e8 ? (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + '억' : n >= 1e4 ? (n / 1e4).toFixed(n >= 1e6 ? 0 : 1).replace(/\.0$/, '') + '만' : fmt(n);
+const cpaText = (sp, db) => db > 0 && sp > 0 ? fmt(sp / db) + '원' : '-';
+
+function parseSpend() {
+  D.spendCh = D.names.map(() => new Map());
+  D.spendOther = new Map(); // DB 탭과 연결되지 않은 채널(미분류 포함): 이름 → Map(day → 금액)
+  D.hasSpend = false;
+  const raw = D.spend && D.spend.rows ? D.spend.rows.split(';') : [];
+  raw.forEach(r => {
+    const p = r.split(','); if (p.length < 3) return;
+    const day = +p[0], amt = +p[p.length - 1], name = p.slice(1, -1).join(',');
+    if (!isFinite(day) || !isFinite(amt)) return;
+    D.hasSpend = true;
+    const c = D.names.indexOf(name);
+    const m = c >= 0 ? D.spendCh[c] : (D.spendOther.get(name) || D.spendOther.set(name, new Map()).get(name));
+    m.set(day, (m.get(day) || 0) + amt);
+  });
+}
+
+function spendSum(chs, d0, d1) {
+  let s = 0;
+  chs.forEach(c => D.spendCh[c].forEach((v, d) => { if (d >= d0 && d <= d1) s += v; }));
+  return s;
+}
+
+function renderSpend() {
+  const box = $('spendCard');
+  if (!D.hasSpend) {
+    $('spendLead').innerHTML = '아직 광고비 데이터가 없어요. 시트에 <b>광고비_구글</b>, <b>광고비_메타</b>, <b>광고비_틱톡</b> 탭이 생기면 자동으로 여기에 채널별 광고비와 CPA가 표시됩니다.';
+    $('spendTable').innerHTML = ''; $('spendWarn').textContent = '';
+    return;
+  }
+  const today = D.asOf.day, Y = today - 1;
+  const nc = D.names.length, A = D.A;
+  const win = { t: [today, today], y: [Y, Y], w: [Y - 6, Y], m: [Y - 29, Y] };
+  const db = {}; Object.keys(win).forEach(k => db[k] = new Float64Array(nc));
+  for (let i = 0; i < D.n; i++) {
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i]; if (d < Y - 29 || d > today) continue;
+    for (const k in win) if (d >= win[k][0] && d <= win[k][1]) db[k][A.src[i]]++;
+  }
+  const stat = chs => {
+    const o = {};
+    for (const k in win) { o[k + 'S'] = spendSum(chs, win[k][0], win[k][1]); o[k + 'D'] = chs.reduce((a, c) => a + db[k][c], 0); }
+    return o;
+  };
+  const rows = D.hier.map(r => Object.assign({}, r, { st: stat(r.ch) }));
+  const a = rows[0].st;
+  const cmp = (cur, base) => {
+    if (!cur || !base) return '';
+    const v = (cur - base) / base * 100;
+    return `<span class="delta ${v <= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>`; // CPA는 낮을수록 좋음
+  };
+  const cT = a.tD ? a.tS / a.tD : 0, cW = a.wD ? a.wS / a.wD : 0;
+  $('spendLead').innerHTML =
+    `오늘 지금까지 광고비 <b>${wonShort(a.tS)}원</b>으로 DB ${fmt(a.tD)}건, CPA <b class="hl">${cpaText(a.tS, a.tD)}</b>이에요` +
+    (cT && cW ? ` (최근 7일 평균 CPA ${fmt(cW)}원 대비 <b class="${cT <= cW ? 'up' : 'down'}">${cT >= cW ? '+' : ''}${((cT - cW) / cW * 100).toFixed(0)}%</b>).` : '.') +
+    ` 어제는 ${wonShort(a.yS)}원, CPA ${cpaText(a.yS, a.yD)}였어요.`;
+
+  $('spendTable').innerHTML =
+    '<thead><tr><th>구분</th><th>오늘 광고비</th><th>오늘 CPA</th><th class="x">어제 광고비</th><th class="xm">어제 CPA</th><th class="x">7일 광고비</th><th>7일 CPA</th><th class="x">30일 CPA</th></tr></thead><tbody>' +
+    rows.filter(r => !r.parent || S.open.has(r.parent)).map(r => {
+      const s = r.st;
+      const isOpen = S.open.has(r.key);
+      const caret = r.kids ? `<span class="caret${isOpen ? ' open' : ''}" aria-hidden="true">▸</span>` : '';
+      const dot = r.color ? `<i style="background:${r.color}"></i>` : '';
+      const tc = s.tD ? s.tS / s.tD : 0, wc = s.wD ? s.wS / s.wD : 0;
+      return `<tr class="lv${r.lv}${r.kids ? ' parent' : ''}" data-key="${esc(r.key)}"${r.kids ? ' data-kids="1"' : ''}>` +
+        `<td class="name">${caret}${dot}${esc(r.name)}</td>` +
+        `<td>${wonShort(s.tS)}<span class="m">DB ${fmt(s.tD)}건</span></td>` +
+        `<td class="fc">${cpaText(s.tS, s.tD)}${cmp(tc, wc)}<span class="m">어제 ${cpaText(s.yS, s.yD)}</span></td>` +
+        `<td class="x dim">${wonShort(s.yS)}</td>` +
+        `<td class="xm">${cpaText(s.yS, s.yD)}</td>` +
+        `<td class="x dim">${wonShort(s.wS)}</td>` +
+        `<td>${cpaText(s.wS, s.wD)}<span class="m">${wonShort(s.wS)}원</span></td>` +
+        `<td class="x">${cpaText(s.mS, s.mD)}</td></tr>`;
+    }).join('') + '</tbody>';
+
+  // DB 탭과 연결 안 된 광고비 안내
+  const others = [...D.spendOther.entries()].map(([n, m]) => { let t = 0; m.forEach((v, d) => { if (d >= Y - 29) t += v; }); return [n, t]; }).filter(x => x[1] > 0);
+  $('spendWarn').textContent = others.length
+    ? '최근 30일 광고비 중 DB 채널과 연결되지 않은 금액: ' + others.map(([n, t]) => `${n} ${wonShort(t)}원`).join(', ') + ' (미분류는 광고비 연동 규칙에서 캠페인→채널 연결을 확인해 주세요)'
+    : '';
+  $('spendMeta').textContent = '광고비는 VAT 포함 기준, 약 1시간마다 갱신돼요. 출처 탭: ' + ((D.spend && D.spend.tabs) || []).join(', ');
+}
+
+function renderSpendTrend(dayBySrc) {
+  const card = $('spendTrendCard');
+  card.hidden = !D.hasSpend;
+  if (!D.hasSpend) return;
+  const labels = [], index = new Map(), bucketOfDay = [];
+  for (let d = S.from; d <= S.to; d++) {
+    const t = new Date(d * 864e5), y = t.getUTCFullYear(), m = t.getUTCMonth() + 1;
+    const k = S.trend === 'day' ? d : S.trend === 'week' ? d - dowOf(d) : y * 12 + m;
+    const lab = S.trend === 'day' ? m + '/' + t.getUTCDate() : S.trend === 'week' ? (() => { const w = new Date(k * 864e5); return (w.getUTCMonth() + 1) + '/' + w.getUTCDate() + '주'; })() : y + '.' + pad(m);
+    if (!index.has(k)) { index.set(k, labels.length); labels.push(lab); }
+    bucketOfDay.push(index.get(k));
+  }
+  const nb = labels.length;
+  const spendOf = chs => { const arr = new Array(nb).fill(0); chs.forEach(c => D.spendCh[c].forEach((v, d) => { if (d >= S.from && d <= S.to) arr[bucketOfDay[d - S.from]] += v; })); return arr; };
+  const sel = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
+  const units = S.stack === 'group'
+    ? D.groups.map(g => ({ name: g.name, color: g.color, chs: g.idx.filter(c => S.src.has(c)) })).filter(u => u.chs.length)
+    : sel.map(c => ({ name: D.names[c], color: chColor(c), chs: [c] }));
+  const totS = new Array(nb).fill(0), totD = new Array(nb).fill(0);
+  const ds = units.map(u => { const data = spendOf(u.chs); data.forEach((v, i) => totS[i] += v); return { type: 'bar', label: u.name, data: data, backgroundColor: u.color, stack: 's', yAxisID: 'y', borderRadius: 2, maxBarThickness: 48, order: 2 }; });
+  sel.forEach(c => { const src = dayBySrc[c]; for (let j = 0; j < src.length; j++) totD[bucketOfDay[j]] += src[j]; });
+  const cpa = totS.map((v, i) => totD[i] && v ? v / totD[i] : null);
+  ds.push({ type: 'line', label: 'CPA', data: cpa, borderColor: '#18212E', backgroundColor: '#18212E', borderWidth: 2, pointRadius: S.trend === 'day' ? 0 : 3, tension: 0.25, yAxisID: 'y1', order: 1, spanGaps: true });
+  const sumS = totS.reduce((a, b) => a + b, 0), sumD = totD.reduce((a, b) => a + b, 0);
+  $('spendTrendNote').textContent = `선택 기간 광고비 ${wonShort(sumS)}원, DB ${fmt(sumD)}건, 평균 CPA ${cpaText(sumS, sumD)}`;
+  draw('spendTrendChart', {
+    type: 'bar',
+    data: { labels: labels, datasets: ds },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 16, maxRotation: 0 } },
+        y: { stacked: true, beginAtZero: true, position: 'left', ticks: { callback: v => wonShort(v) } },
+        y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { callback: v => fmt(v) + '원' } }
+      },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 12 } },
+        tooltip: { filter: c => c.raw != null && c.raw > 0, callbacks: { label: c => ' ' + c.dataset.label + ': ' + (c.dataset.label === 'CPA' ? fmt(c.raw) + '원' : wonShort(c.raw) + '원') } }
+      }
+    }
+  });
 }
 
 /* ---------- 자동 갱신 ---------- */
