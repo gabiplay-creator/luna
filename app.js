@@ -35,7 +35,17 @@ const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
-const $ = id => document.getElementById(id);
+const $ = id => document.getElementById(id) || ghost(id);
+// index.html과 app.js 버전이 어긋나 요소가 없어도 멈추지 않도록, 없는 요소는 화면에 안 보이는 임시 요소로 대신합니다.
+const ghosts = {};
+function ghost(id) {
+  if (!ghosts[id]) {
+    const el = document.createElement(/Chart$/.test(id) ? 'canvas' : /Table|Strip/.test(id) ? 'table' : 'div');
+    el.id = id; el.hidden = true; ghosts[id] = el;
+    console.warn('index.html에 #' + id + ' 요소가 없어요. index.html을 app.js와 같은 버전으로 올려 주세요.');
+  }
+  return ghosts[id];
+}
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
 const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '0%';
 const pad = n => String(n).padStart(2, '0');
@@ -54,6 +64,13 @@ const chColor = c => {
 };
 
 /* ---------- 데이터 불러오기 ---------- */
+window.addEventListener('error', e => {
+  const m = document.getElementById('loadMsg');
+  if (m && !document.getElementById('overlay').classList.contains('hidden')) {
+    m.className = 'err';
+    m.textContent = '화면을 그리는 중 오류가 났어요: ' + (e.message || e) + ' — GitHub의 index.html, style.css, app.js가 같은 버전인지 확인해 주세요.';
+  }
+});
 let loading = false;
 let lastLoad = 0;
 async function load(force, silent) {

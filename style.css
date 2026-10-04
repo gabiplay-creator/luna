@@ -269,3 +269,19 @@ li.empty-li { display: block; color: var(--muted); }
   .rec-v { font-size: 24px; }
   select { flex: 1 1 auto; }
 }
+
+/* ---------- v9: 광고비 · CPA ---------- */
+.spend { margin-bottom: 16px; }
+.spend-lead { font-size: 17px; }
+.spend-lead .up, .live-lead .up { color: #0E8F72; }
+.spend-lead .down, .live-lead .down { color: #C2413A; }
+#spendTable tbody tr { cursor: default; }
+#spendTable tbody tr.parent { cursor: pointer; }
+.warn { color: #9A5B00; }
+.warn:empty { display: none; }
+@media (max-width: 720px) { .spend-lead { font-size: 15px; } }
+@media (max-width: 720px) {
+  #spendTable .xm { display: none; }
+  #spendTable .delta { display: block; margin: 0; }
+  #spendTable td.fc .m { color: var(--muted); }
+}

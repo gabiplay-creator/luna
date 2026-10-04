@@ -46,6 +46,16 @@
     <p class="note method">최근 4주간 시간대별로 하루 DB가 쌓이는 패턴과 최근 7일 평균(요일 보정)을 함께 써서 예측해요. 하루가 지날수록 오늘 실제 페이스의 비중이 커집니다. 예상 범위는 최근 14일 동안 같은 시각에 같은 방식으로 예측했을 때의 평균 오차이고, 마감은 자정(24시) 기준이에요. 이 영역은 아래 기간·채널 필터와 상관없이 전체 데이터로 계산합니다.</p>
   </section>
 
+  <section class="card spend" id="spendCard" aria-label="광고비와 CPA">
+    <div class="chead">
+      <h2>광고비 · CPA</h2>
+      <span class="note" id="spendMeta"></span>
+    </div>
+    <p class="live-lead spend-lead" id="spendLead"></p>
+    <div class="tbl live-tbl"><table id="spendTable"></table></div>
+    <p class="note warn" id="spendWarn"></p>
+  </section>
+
   <section class="filters" aria-label="필터">
     <div class="frow">
       <span class="flabel">기간</span>
@@ -86,6 +96,12 @@
       </div>
       <div class="cbox tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
+    </section>
+
+    <section class="card full" id="spendTrendCard" hidden>
+      <div class="chead"><h2>광고비 · CPA 추이</h2><span class="note" id="spendTrendNote"></span></div>
+      <div class="cbox tall"><canvas id="spendTrendChart"></canvas></div>
+      <p class="note">막대는 광고비(왼쪽 축), 선은 CPA(오른쪽 축)예요. 위의 일별·주간·월별, 채널별·그룹별 선택과 기간·채널 필터를 그대로 따릅니다.</p>
     </section>
 
     <section class="card">
