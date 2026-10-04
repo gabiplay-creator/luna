@@ -59,10 +59,19 @@ let lastLoad = 0;
 async function load(force, silent) {
   if (loading) return;
   loading = true;
+  let tick = null;
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = setTimeout(() => ctrl && ctrl.abort(), 150000);
   if (!silent) {
     $('overlay').classList.remove('hidden');
     $('loadMsg').className = '';
-    $('loadMsg').textContent = '시트에서 데이터를 불러오는 중입니다…';
+    const t0 = Date.now();
+    const show = () => {
+      const sec = Math.round((Date.now() - t0) / 1000);
+      $('loadMsg').textContent = '시트에서 데이터를 불러오는 중입니다… ' + sec + '초' +
+        (sec >= 45 ? ' (저장된 결과가 없어 시트 전체를 새로 읽고 있어요. 조금만 더 기다려 주세요)' : '');
+    };
+    show(); tick = setInterval(show, 1000);
   } else {
     $('liveMeta').textContent = '최신 데이터 확인 중…';
   }
@@ -71,7 +80,7 @@ async function load(force, silent) {
     const u = new URL(CFG.API_URL);
     if (CFG.TOKEN) u.searchParams.set('token', CFG.TOKEN);
     if (force) u.searchParams.set('refresh', '1');
-    const res = await fetch(u.toString());
+    const res = await fetch(u.toString(), ctrl ? { signal: ctrl.signal } : {});
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); }
@@ -79,10 +88,12 @@ async function load(force, silent) {
     if (data.error) throw new Error(data.error === 'unauthorized' ? 'TOKEN이 Apps Script의 ACCESS_TOKEN과 다릅니다.' : data.error);
     onData(data);
   } catch (e) {
+    if (e && e.name === 'AbortError') e = new Error('응답이 2분 30초 넘게 없어요. Apps Script의 실행 기록에서 doGet 오류를 확인해 주세요.');
     if (silent && D) { $('liveMeta').textContent = '자동 갱신에 실패했어요. 다음 주기에 다시 시도합니다.'; }
     else onErr(e);
   } finally {
     loading = false;
+    clearInterval(tick); clearTimeout(timeout);
   }
 }
 
@@ -128,7 +139,7 @@ function onData(raw) {
   applyPreset(S.preset);
   renderLive();
   renderSpend();
-  $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
+  $('meta').textContent = '데이터 기준 ' + D.generatedAt + (D.buildSec ? ' (계산 ' + D.buildSec + '초)' : '') + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
     (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
   buildRankTarget();

@@ -104,7 +104,7 @@ function buildAndCache_(isWarm) {
 /** 모든 채널 탭을 읽어 압축된 JSON 문자열로 반환 */
 function getDashboardData() {
   const t0 = Date.now();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById('1GgecwoK7Fp5Px_DSFFPgq0a3zYnx6KLgkrqe18k32nk');
   const notes = new Dict();
   const platforms = new Dict();
   const campaigns = new Dict();
