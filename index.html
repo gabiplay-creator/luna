@@ -19,11 +19,17 @@
       <h1>글로벌랩스 DB 대시보드</h1>
       <div class="sub" id="meta">-</div>
     </div>
+    <nav class="tabs" role="tablist" aria-label="페이지">
+      <button role="tab" data-page="live" aria-selected="true">실시간 현황</button>
+      <button role="tab" data-page="rank" aria-selected="false">순위</button>
+    </nav>
     <div class="head-right">
       <label class="toggle"><input type="checkbox" id="autoRefresh" checked> 5분마다 자동 갱신</label>
       <button class="btn" id="reload">최신 데이터로 새로고침</button>
     </div>
   </header>
+
+  <div id="page-live">
 
   <section class="card live" aria-label="오늘 마감 예측">
     <div class="chead">
@@ -133,6 +139,30 @@
     <summary>데이터 상태 (탭별 인식 결과)</summary>
     <table id="reportTable"></table>
   </details>
+  </div>
+
+  <div id="page-rank" hidden>
+    <section class="card rank-top">
+      <div class="chead">
+        <h2>DB 유입 순위</h2>
+        <span class="note" id="rankMeta"></span>
+      </div>
+      <div class="frow rank-ctrl">
+        <label class="flabel" for="rankTarget">대상</label>
+        <select id="rankTarget"></select>
+        <label class="toggle"><input type="checkbox" id="dedupe2"> 같은 채널 내 중복 연락처 제외</label>
+      </div>
+      <div class="records" id="records"></div>
+      <div class="rank-legend" id="rankLegend"></div>
+    </section>
+    <div class="grid rank-grid">
+      <section class="card"><div class="chead"><h2>일별 TOP 10</h2><span class="note" id="rkDayNote"></span></div><ol class="rank" id="rkDay"></ol></section>
+      <section class="card"><div class="chead"><h2>월별 TOP 10</h2><span class="note" id="rkMonthNote"></span></div><ol class="rank" id="rkMonth"></ol></section>
+      <section class="card"><div class="chead"><h2>주간 TOP 10</h2><span class="note" id="rkWeekNote"></span></div><ol class="rank" id="rkWeek"></ol></section>
+      <section class="card"><div class="chead"><h2>시간당 TOP 10</h2><span class="note" id="rkHourNote"></span></div><ol class="rank" id="rkHour"></ol></section>
+    </div>
+    <p class="note rank-foot">전체 통계 기간을 기준으로 집계해요. 막대는 1위 대비 길이이고, 색은 하위 그룹·채널의 구성 비율이에요. "평균 대비"는 같은 단위(일·주·월·시간)의 평균과 비교한 값이며, 진행 중인 오늘·이번 주·이번 달은 평균 계산에서 뺍니다.</p>
+  </div>
 </div>
 
 <script src="app.js"></script>

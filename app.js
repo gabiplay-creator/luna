@@ -31,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share' };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: location.hash === '#rank' ? 'rank' : 'live', rankKey: 'all' };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -129,6 +129,9 @@ function onData(raw) {
   $('meta').textContent = '데이터 기준 ' + D.generatedAt + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
     (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
+  buildRankTarget();
+  renderRank();
+  showPage(S.page, false);
   $('overlay').classList.add('hidden');
 }
 
@@ -231,7 +234,23 @@ $('chips').addEventListener('click', e => {
   syncControls(); render();
 });
 $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
-$('dedupe').addEventListener('change', e => { S.dedupe = e.target.checked; render(); renderLive(); });
+function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderRank(); }
+$('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
+$('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
+$('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
+document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page, true); });
+window.addEventListener('hashchange', () => showPage(location.hash === '#rank' ? 'rank' : 'live', false));
+
+function showPage(p, push) {
+  S.page = p;
+  $('page-live').hidden = p !== 'live';
+  $('page-rank').hidden = p !== 'rank';
+  document.querySelectorAll('.tabs [data-page]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === p)));
+  if (push) history.replaceState(null, '', p === 'rank' ? '#rank' : location.pathname + location.search);
+  if (p === 'rank') renderRank();
+  else Object.values(charts).forEach(c => c.resize());
+  if (push) window.scrollTo(0, 0);
+}
 const segHandler = (id, key) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S[key] = b.dataset.v; syncControls(); render(); } });
 segHandler('trendSeg', 'trend'); segHandler('stackSeg', 'stack'); segHandler('dimSeg', 'dim');
 segHandler('cmpBaseSeg', 'cmpBase'); segHandler('cmpMetricSeg', 'cmpMetric');
@@ -840,6 +859,97 @@ function renderHourCompare() {
   $('cmpNote').textContent = isShare
     ? '유입 비중 차이(%p): 하루 중 그 시간대가 차지하는 비율이 비교 기준보다 몇 %p 높거나 낮은지예요. 전체 양과 상관없이 패턴 변화만 봅니다.'
     : '건수 증감(%): 어제 그 시간대 건수가 비교 기준의 하루 평균 건수보다 몇 % 많거나 적은지예요. 새벽처럼 건수가 적은 시간대는 변동이 크게 나올 수 있어요.';
+}
+
+
+/* =========================================================
+ * 2페이지: 순위
+ * ========================================================= */
+function buildRankTarget() {
+  if (!D.hier.some(r => r.key === S.rankKey)) S.rankKey = 'all';
+  $('rankTarget').innerHTML = D.hier.map(r =>
+    `<option value="${esc(r.key)}"${r.key === S.rankKey ? ' selected' : ''}>${'\u00A0\u00A0\u00A0'.repeat(r.lv)}${esc(r.name)}</option>`).join('');
+}
+
+function renderRank() {
+  if (!D || S.page !== 'rank') return;
+  $('dedupe2').checked = S.dedupe;
+  const row = D.hier.find(r => r.key === S.rankKey) || D.hier[0];
+  const chs = new Set(row.ch);
+
+  // 막대 구성: 전체·주력군 → 팀, 팀·지원군 → 채널, 채널 → 자기 자신
+  let parts;
+  const teams = D.groups.filter(g => g.idx.some(c => chs.has(c)));
+  if ((row.lv === 0 || row.lv === 1) && teams.length > 1) parts = teams.map(g => ({ name: g.name, color: g.color, ch: g.idx.filter(c => chs.has(c)) }));
+  else parts = row.ch.map(c => ({ name: D.names[c], color: chColor(c), ch: [c] }));
+  const np = parts.length, partOf = new Map();
+  parts.forEach((p, i) => p.ch.forEach(c => partOf.set(c, i)));
+
+  const today = D.asOf.day, tHour = Math.floor(D.asOf.t);
+  const curWeek = today - dowOf(today);
+  const tt = new Date(today * 864e5), curMonth = tt.getUTCFullYear() * 12 + tt.getUTCMonth() + 1;
+  const maps = { day: new Map(), week: new Map(), month: new Map(), hour: new Map() };
+  const add = (m, k, p) => { let a = m.get(k); if (!a) { a = new Float64Array(np + 1); m.set(k, a); } a[p]++; a[np]++; };
+  const A = D.A;
+  let start = Infinity;
+  for (let i = 0; i < D.n; i++) {
+    const c = A.src[i];
+    if (!chs.has(c)) continue;
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i], p = partOf.get(c);
+    if (d < start) start = d;
+    add(maps.day, d, p);
+    add(maps.week, d - dowOf(d), p);
+    const t = new Date(d * 864e5);
+    add(maps.month, t.getUTCFullYear() * 12 + t.getUTCMonth() + 1, p);
+    if (A.hour[i] >= 0) add(maps.hour, d * 24 + A.hour[i], p);
+  }
+  if (!isFinite(start)) start = today;
+
+  const types = {
+    day: { el: 'rkDay', partial: k => k === today, label: k => fmtDay(k) + ' (' + DOW[dowOf(k)] + ')', unit: '하루', tag: '오늘' },
+    week: { el: 'rkWeek', partial: k => k === curWeek, label: k => fmtDay(k) + ' ~ ' + fmtDay(k + 6).slice(5), unit: '주', tag: '이번 주' },
+    month: { el: 'rkMonth', partial: k => k === curMonth, label: k => Math.floor((k - 1) / 12) + '년 ' + ((k - 1) % 12 + 1) + '월', unit: '월', tag: '이번 달' },
+    hour: { el: 'rkHour', partial: k => k === today * 24 + tHour, label: k => { const d = Math.floor(k / 24); return fmtDay(d) + ' (' + DOW[dowOf(d)] + ') ' + (k % 24) + '시'; }, unit: '시간', tag: '진행 중' }
+  };
+  // 평균: 진행 중인 기간을 뺀, 시작일부터의 모든 기간(0건 포함)
+  const sMonth = (() => { const t = new Date(start * 864e5); return t.getUTCFullYear() * 12 + t.getUTCMonth() + 1; })();
+  const periods = {
+    day: Math.max(1, today - start),
+    week: Math.max(1, (curWeek - (start - dowOf(start))) / 7),
+    month: Math.max(1, curMonth - sMonth),
+    hour: Math.max(1, (today - start) * 24 + tHour)
+  };
+  const recs = {};
+
+  Object.keys(types).forEach(type => {
+    const T = types[type], m = maps[type];
+    let sum = 0; m.forEach((a, k) => { if (!T.partial(k)) sum += a[np]; });
+    const avg = sum / periods[type];
+    const list = [...m.entries()].sort((x, y) => y[1][np] - x[1][np] || y[0] - x[0]).slice(0, 10);
+    const max = list.length ? list[0][1][np] : 1;
+    let prevN = null, prevRank = 0;
+    recs[type] = list[0] ? { k: list[0][0], n: list[0][1][np], label: T.label(list[0][0]), avg: avg } : null;
+    $(T.el).innerHTML = list.length ? list.map(([k, a], i) => {
+      const n = a[np];
+      const rank = n === prevN ? prevRank : i + 1; prevN = n; prevRank = rank;
+      const vs = avg > 0 ? (n - avg) / avg * 100 : null;
+      const segs = parts.map((p, j) => a[j] ? `<span style="width:${(a[j] / max * 100).toFixed(2)}%;background:${p.color}" title="${esc(p.name)} ${fmt(a[j])}건"></span>` : '').join('');
+      const tip = parts.map((p, j) => p.name + ' ' + fmt(a[j])).join(', ');
+      return `<li class="${rank === 1 ? 'top' : ''}" title="${esc(tip)}"><span class="rk">${rank}</span>` +
+        `<div class="rb"><div class="rl"><span class="lab">${T.label(k)}</span>${T.partial(k) ? `<span class="tag">${T.tag}</span>` : ''}</div>` +
+        `<div class="sbar">${segs}</div></div>` +
+        `<div class="rv"><b>${fmt(n)}</b>${vs == null ? '' : `<span class="${vs >= 0 ? 'up' : 'down'}">평균 대비 ${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</span>`}</div></li>`;
+    }).join('') : '<li class="empty-li">데이터가 없어요.</li>';
+    $(T.el.replace('rk', 'rk') + 'Note').textContent = `${T.unit} 평균 ${avg >= 10 ? fmt(avg) : avg.toFixed(1)}건`;
+  });
+
+  $('rankMeta').textContent = '통계 기간 ' + fmtDay(start) + ' ~ ' + fmtDay(today) + ' (' + fmt(today - start + 1) + '일)';
+  const recCard = (title, r) => !r ? '' :
+    `<div class="rec"><div class="rec-t">${title}</div><div class="rec-v">${fmt(r.n)}<small>건</small></div><div class="rec-l">${r.label}</div>` +
+    `<div class="rec-a">평균 ${r.avg >= 10 ? fmt(r.avg) : r.avg.toFixed(1)}건의 ${(r.n / Math.max(r.avg, 1e-9)).toFixed(1)}배</div></div>`;
+  $('records').innerHTML = recCard('역대 최고의 날', recs.day) + recCard('최고의 달', recs.month) + recCard('최고의 주', recs.week) + recCard('최고의 1시간', recs.hour);
+  $('rankLegend').innerHTML = parts.length > 1 ? '막대 구성 ' + parts.map(p => `<span><i style="background:${p.color}"></i>${esc(p.name)}</span>`).join('') : '';
 }
 
 /* ---------- 자동 갱신 ---------- */
