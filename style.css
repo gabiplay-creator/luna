@@ -285,3 +285,8 @@ li.empty-li { display: block; color: var(--muted); }
   #spendTable .delta { display: block; margin: 0; }
   #spendTable td.fc .m { color: var(--muted); }
 }
+
+/* ---------- v13: 광고비 입력률 ---------- */
+.cov { display: inline-block; margin-left: 5px; font-size: 10.5px; font-weight: 500; color: #9A5B00; background: #FFF1D6; border-radius: 4px; padding: 0 5px; vertical-align: 1px; }
+td .dim, .dim { color: var(--muted); font-weight: 400; }
+@media (max-width: 720px) { .cov { display: block; width: fit-content; margin: 2px 0 0 auto; } }

@@ -1019,64 +1019,89 @@ function spendSum(chs, d0, d1) {
 }
 
 function renderSpend() {
-  const box = $('spendCard');
   if (!D.hasSpend) {
-    $('spendLead').innerHTML = '아직 광고비 데이터가 없어요. 시트에 <b>광고비_구글</b>, <b>광고비_메타</b>, <b>광고비_틱톡</b> 탭이 생기면 자동으로 여기에 채널별 광고비와 CPA가 표시됩니다.';
+    $('spendLead').innerHTML = '아직 광고비 데이터가 없어요. 시트에 <b>광고비_수동</b>(또는 광고비_구글·메타·틱톡) 탭이 생기면 자동으로 채널별 광고비와 CPA가 표시됩니다.';
     $('spendTable').innerHTML = ''; $('spendWarn').textContent = '';
     return;
   }
-  const today = D.asOf.day, Y = today - 1;
-  const nc = D.names.length, A = D.A;
-  const win = { t: [today, today], y: [Y, Y], w: [Y - 6, Y], m: [Y - 29, Y] };
-  const db = {}; Object.keys(win).forEach(k => db[k] = new Float64Array(nc));
+  const today = D.asOf.day, nc = D.names.length, A = D.A;
+  // 기준일: 광고비가 입력된 가장 최근 날 (오늘은 광고비가 다음 날 입력되므로 제외)
+  let B = -Infinity;
+  D.spendCh.forEach(m => m.forEach((v, d) => { if (d < today && d > B) B = d; }));
+  if (!isFinite(B)) { $('spendLead').innerHTML = '지난 날짜의 광고비가 아직 없어요.'; $('spendTable').innerHTML = ''; return; }
+  const bt = new Date(B * 864e5), mStart = B - (bt.getUTCDate() - 1);
+  const win = { b: [B, B], p: [B - 1, B - 1], w: [B - 6, B], mo: [mStart, B] };
+  const lo = Math.min(B - 6, mStart);
+
+  // 채널·일자별 DB 수
+  const dbDay = D.names.map(() => new Map());
   for (let i = 0; i < D.n; i++) {
     if (S.dedupe && A.dup[i]) continue;
-    const d = A.day[i]; if (d < Y - 29 || d > today) continue;
-    for (const k in win) if (d >= win[k][0] && d <= win[k][1]) db[k][A.src[i]]++;
+    const d = A.day[i]; if (d < lo || d > B) continue;
+    const c = A.src[i];
+    dbDay[c].set(d, (dbDay[c].get(d) || 0) + 1);
   }
+  // 각 채널은 자기 광고비 ÷ 자기 DB, 그룹은 광고비가 있는 날·채널끼리만 합산
   const stat = chs => {
     const o = {};
-    for (const k in win) { o[k + 'S'] = spendSum(chs, win[k][0], win[k][1]); o[k + 'D'] = chs.reduce((a, c) => a + db[k][c], 0); }
+    for (const k in win) {
+      let sp = 0, db = 0, have = 0, days = 0;
+      chs.forEach(c => {
+        for (let d = win[k][0]; d <= win[k][1]; d++) {
+          if (d < D.firstDay[c]) continue;
+          days++;
+          if (D.spendCh[c].has(d)) { sp += D.spendCh[c].get(d); db += dbDay[c].get(d) || 0; have++; }
+        }
+      });
+      o[k + 'S'] = sp; o[k + 'D'] = db; o[k + 'Cov'] = days ? have / days : 0;
+    }
     return o;
   };
-  const rows = D.hier.map(r => Object.assign({}, r, { st: stat(r.ch) }));
-  const a = rows[0].st;
-  const cmp = (cur, base) => {
+  const cpaOf = (s, k) => s[k + 'D'] > 0 && s[k + 'S'] > 0 ? s[k + 'S'] / s[k + 'D'] : 0;
+  const cov = (s, k) => s[k + 'Cov'] > 0 && s[k + 'Cov'] < 0.999
+    ? `<span class="cov" title="기간 중 광고비가 입력된 날·채널 비율이에요. 입력된 부분의 광고비와 DB로만 계산했어요.">입력 ${Math.round(s[k + 'Cov'] * 100)}%</span>` : '';
+  const cpaCell = (s, k) => { const v = cpaOf(s, k); return v ? fmt(v) + '원' + cov(s, k) : '<span class="dim">' + (s[k + 'S'] ? '-' : '미입력') + '</span>'; };
+  const delta = (cur, base) => {
     if (!cur || !base) return '';
     const v = (cur - base) / base * 100;
     return `<span class="delta ${v <= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</span>`; // CPA는 낮을수록 좋음
   };
-  const cT = a.tD ? a.tS / a.tD : 0, cW = a.wD ? a.wS / a.wD : 0;
+  const rows = D.hier.map(r => Object.assign({}, r, { st: stat(r.ch) }));
+  const a = rows[0].st;
+  const dayLabel = d => { const t = new Date(d * 864e5); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + '(' + DOW[dowOf(d)] + ')'; };
+  const miss = D.names.filter((n, c) => D.firstDay[c] <= B && !D.spendCh[c].has(B));
+  const cB = cpaOf(a, 'b'), cP = cpaOf(a, 'p'), cM = cpaOf(a, 'mo');
   $('spendLead').innerHTML =
-    `오늘 지금까지 광고비 <b>${wonShort(a.tS)}원</b>으로 DB ${fmt(a.tD)}건, CPA <b class="hl">${cpaText(a.tS, a.tD)}</b>이에요` +
-    (cT && cW ? ` (최근 7일 평균 CPA ${fmt(cW)}원 대비 <b class="${cT <= cW ? 'up' : 'down'}">${cT >= cW ? '+' : ''}${((cT - cW) / cW * 100).toFixed(0)}%</b>).` : '.') +
-    ` 어제는 ${wonShort(a.yS)}원, CPA ${cpaText(a.yS, a.yD)}였어요.`;
+    (B < today - 1 ? `어제 ${dayLabel(today - 1)} 광고비는 아직 입력 전이라 마지막 입력일 기준으로 보여드려요. ` : '') +
+    `<b>${dayLabel(B)}</b> 광고비 <b>${wonShort(a.bS)}원</b>, DB ${fmt(a.bD)}건으로 CPA <b class="hl">${cB ? fmt(cB) + '원' : '-'}</b>` +
+    (cB && cP ? `, 전일 대비 <b class="${cB <= cP ? 'up' : 'down'}">${cB >= cP ? '+' : ''}${((cB - cP) / cP * 100).toFixed(0)}%</b>` : '') + '예요. ' +
+    (cM ? `당월(${dayLabel(mStart)}~${dayLabel(B)}) 누적 CPA는 <b>${fmt(cM)}원</b>이에요.` : '') +
+    (miss.length ? ` <span class="dim">(${dayLabel(B)} 광고비 미입력: ${miss.join(', ')})</span>` : '');
 
   $('spendTable').innerHTML =
-    '<thead><tr><th>구분</th><th>오늘 광고비</th><th>오늘 CPA</th><th class="x">어제 광고비</th><th class="xm">어제 CPA</th><th class="x">7일 광고비</th><th>7일 CPA</th><th class="x">30일 CPA</th></tr></thead><tbody>' +
+    `<thead><tr><th>구분</th><th>${dayLabel(B)} 광고비</th><th class="xm">DB</th><th>CPA</th><th class="x">전일 CPA</th><th class="xm">7일 CPA</th><th class="x">당월 광고비</th><th>당월 CPA</th></tr></thead><tbody>` +
     rows.filter(r => !r.parent || S.open.has(r.parent)).map(r => {
       const s = r.st;
       const isOpen = S.open.has(r.key);
       const caret = r.kids ? `<span class="caret${isOpen ? ' open' : ''}" aria-hidden="true">▸</span>` : '';
       const dot = r.color ? `<i style="background:${r.color}"></i>` : '';
-      const tc = s.tD ? s.tS / s.tD : 0, wc = s.wD ? s.wS / s.wD : 0;
       return `<tr class="lv${r.lv}${r.kids ? ' parent' : ''}" data-key="${esc(r.key)}"${r.kids ? ' data-kids="1"' : ''}>` +
         `<td class="name">${caret}${dot}${esc(r.name)}</td>` +
-        `<td>${wonShort(s.tS)}<span class="m">DB ${fmt(s.tD)}건</span></td>` +
-        `<td class="fc">${cpaText(s.tS, s.tD)}${cmp(tc, wc)}<span class="m">어제 ${cpaText(s.yS, s.yD)}</span></td>` +
-        `<td class="x dim">${wonShort(s.yS)}</td>` +
-        `<td class="xm">${cpaText(s.yS, s.yD)}</td>` +
-        `<td class="x dim">${wonShort(s.wS)}</td>` +
-        `<td>${cpaText(s.wS, s.wD)}<span class="m">${wonShort(s.wS)}원</span></td>` +
-        `<td class="x">${cpaText(s.mS, s.mD)}</td></tr>`;
+        `<td>${s.bS ? wonShort(s.bS) : '<span class="dim">-</span>'}<span class="m">DB ${fmt(s.bD)}건</span></td>` +
+        `<td class="xm dim">${fmt(s.bD)}</td>` +
+        `<td class="fc">${cpaCell(s, 'b')}${delta(cpaOf(s, 'b'), cpaOf(s, 'p'))}<span class="m">전일 ${cpaOf(s, 'p') ? fmt(cpaOf(s, 'p')) + '원' : '-'}</span></td>` +
+        `<td class="x">${cpaCell(s, 'p')}</td>` +
+        `<td class="xm">${cpaCell(s, 'w')}</td>` +
+        `<td class="x dim">${s.moS ? wonShort(s.moS) : '-'}</td>` +
+        `<td>${cpaCell(s, 'mo')}<span class="m">7일 ${cpaOf(s, 'w') ? fmt(cpaOf(s, 'w')) + '원' : '-'}</span></td></tr>`;
     }).join('') + '</tbody>';
 
   // DB 탭과 연결 안 된 광고비 안내
-  const others = [...D.spendOther.entries()].map(([n, m]) => { let t = 0; m.forEach((v, d) => { if (d >= Y - 29) t += v; }); return [n, t]; }).filter(x => x[1] > 0);
+  const others = [...D.spendOther.entries()].map(([n, m]) => { let t = 0; m.forEach((v, d) => { if (d >= mStart && d <= B) t += v; }); return [n, t]; }).filter(x => x[1] > 0);
   $('spendWarn').textContent = others.length
-    ? '최근 30일 광고비 중 DB 채널과 연결되지 않은 금액: ' + others.map(([n, t]) => `${n} ${wonShort(t)}원`).join(', ') + ' (미분류는 광고비 연동 규칙에서 캠페인→채널 연결을 확인해 주세요)'
+    ? `당월 광고비 중 대시보드에 DB 탭이 없는 채널: ${others.map(([n, t]) => `${n} ${wonShort(t)}원`).join(', ')}. 대시보드 시트에 GL(${others.map(x => x[0]).join('), GL(')}) 탭이 생기면 CPA가 계산돼요.`
     : '';
-  $('spendMeta').textContent = '광고비는 VAT 포함 기준, 약 1시간마다 갱신돼요. 출처 탭: ' + ((D.spend && D.spend.tabs) || []).join(', ');
+  $('spendMeta').textContent = '광고비는 VAT 포함, 전날분까지 입력 기준. 출처 탭: ' + ((D.spend && D.spend.tabs) || []).join(', ');
 }
 
 function renderSpendTrend(dayBySrc) {
@@ -1099,11 +1124,11 @@ function renderSpendTrend(dayBySrc) {
     : sel.map(c => ({ name: D.names[c], color: chColor(c), chs: [c] }));
   const totS = new Array(nb).fill(0), totD = new Array(nb).fill(0);
   const ds = units.map(u => { const data = spendOf(u.chs); data.forEach((v, i) => totS[i] += v); return { type: 'bar', label: u.name, data: data, backgroundColor: u.color, stack: 's', yAxisID: 'y', borderRadius: 2, maxBarThickness: 48, order: 2 }; });
-  sel.forEach(c => { const src = dayBySrc[c]; for (let j = 0; j < src.length; j++) totD[bucketOfDay[j]] += src[j]; });
+  sel.forEach(c => { const src = dayBySrc[c]; for (let j = 0; j < src.length; j++) if (D.spendCh[c].has(S.from + j)) totD[bucketOfDay[j]] += src[j]; });
   const cpa = totS.map((v, i) => totD[i] && v ? v / totD[i] : null);
   ds.push({ type: 'line', label: 'CPA', data: cpa, borderColor: '#18212E', backgroundColor: '#18212E', borderWidth: 2, pointRadius: S.trend === 'day' ? 0 : 3, tension: 0.25, yAxisID: 'y1', order: 1, spanGaps: true });
   const sumS = totS.reduce((a, b) => a + b, 0), sumD = totD.reduce((a, b) => a + b, 0);
-  $('spendTrendNote').textContent = `선택 기간 광고비 ${wonShort(sumS)}원, DB ${fmt(sumD)}건, 평균 CPA ${cpaText(sumS, sumD)}`;
+  $('spendTrendNote').textContent = `선택 기간 광고비 ${wonShort(sumS)}원, 광고비 입력된 날의 DB ${fmt(sumD)}건, 평균 CPA ${cpaText(sumS, sumD)}`;
   draw('spendTrendChart', {
     type: 'bar',
     data: { labels: labels, datasets: ds },
