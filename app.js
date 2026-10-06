@@ -223,6 +223,11 @@ function applyPreset(p) {
   S.preset = p;
   if (p === 'all') { S.from = D.min; S.to = D.max; }
   else if (p === 'yesterday') { S.from = S.to = Math.min(D.max, D.asOf.day - 1); }
+  else if (p === 'month' || p === 'lastmonth') {
+    const t = new Date(D.asOf.day * 864e5), y = t.getUTCFullYear(), m = t.getUTCMonth();
+    const r = monthRange(p === 'month' ? y : (m ? y : y - 1), p === 'month' ? m : (m ? m - 1 : 11));
+    S.from = r[0]; S.to = Math.min(r[1], D.max);
+  }
   else if (p) { S.to = D.max; S.from = Math.max(D.min, D.max - (+p) + 1); }
   S.from = clamp(S.from, D.min, D.max); S.to = clamp(S.to, D.min, D.max);
   syncControls();
@@ -246,7 +251,19 @@ function syncControls() {
   document.querySelectorAll('#chips .chip').forEach(b => b.setAttribute('aria-pressed', String(S.src.has(+b.dataset.i))));
 }
 
+function monthRange(y, m) { // m: 0~11
+  return [Math.floor(Date.UTC(y, m, 1) / 864e5), Math.floor(Date.UTC(y, m + 1, 0) / 864e5)];
+}
 function shiftRange(dir) {
+  // 한 달 단위로 선택돼 있으면 달 단위로 이동
+  const f0 = new Date(S.from * 864e5);
+  const mr = monthRange(f0.getUTCFullYear(), f0.getUTCMonth());
+  if (S.from === mr[0] && (S.to === mr[1] || (S.to === D.max && S.to < mr[1]))) {
+    const r = monthRange(f0.getUTCFullYear(), f0.getUTCMonth() + dir);
+    if (r[0] > D.max || r[1] < D.min) return;
+    S.from = Math.max(r[0], D.min); S.to = Math.min(r[1], D.max); S.preset = null;
+    syncControls(); render(); return;
+  }
   const span = S.to - S.from + 1;
   let f = S.from + dir * span, t = S.to + dir * span;
   if (t > D.max) { t = D.max; f = t - span + 1; }
@@ -656,14 +673,60 @@ function renderTrend(dayBySrc) {
   $('trendNote').textContent = S.trend === 'week' ? '주는 월요일 시작 기준이며, 기간 양 끝의 주는 일부 일자만 포함될 수 있어요.'
     : S.trend === 'month' ? '기간 양 끝의 월은 선택한 일자만 포함됩니다.' : '';
 
+  // 막대 위 라벨용: 구간별 DB 합계, 광고비, CPA(광고비가 있는 날·채널의 DB 기준)
+  const selCh = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
+  const nb = labels.length;
+  const bDb = new Array(nb).fill(0), bSp = new Array(nb).fill(0), bMdb = new Array(nb).fill(0);
+  selCh.forEach(c => {
+    const src = dayBySrc[c];
+    for (let j = 0; j < src.length; j++) {
+      const b = bucketOfDay[j], n = src[j];
+      bDb[b] += n;
+      const v = D.spendCh && D.spendCh[c] && D.spendCh[c].get(S.from + j);
+      if (v) { bSp[b] += v; bMdb[b] += n; }
+    }
+  });
+  const bCpa = bSp.map((v, i) => v && bMdb[i] ? v / bMdb[i] : 0);
+  const man = v => v >= 1e4 ? (v / 1e4).toFixed(v >= 1e5 ? 0 : 1).replace(/\.0$/, '') + '만' : fmt(v);
+  const barLabels = {
+    id: 'barLabels',
+    afterDatasetsDraw(chart) {
+      const xs = chart.scales.x, ys = chart.scales.y, ctx = chart.ctx;
+      const w = nb > 1 ? Math.abs(xs.getPixelForValue(1) - xs.getPixelForValue(0)) : chart.chartArea.width;
+      const mode = w >= 60 ? 3 : w >= 30 ? 2 : w >= 18 ? 1 : 0;
+      if (!mode) return;
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      for (let i = 0; i < nb; i++) {
+        if (!bDb[i]) continue;
+        const x = xs.getPixelForValue(i);
+        let y = ys.getPixelForValue(bDb[i]) - 4;
+        const lines = [];
+        if (mode >= 3 && bCpa[i]) lines.push(['CPA ' + fmt(bCpa[i]), '500 10.5px', '#2F5BD3']);
+        else if (mode === 2 && bCpa[i]) lines.push([man(bCpa[i]), '500 10px', '#2F5BD3']);
+        if (mode >= 3 && bSp[i]) lines.push([wonShort(bSp[i]) + '원', '400 10.5px', '#5D6878']);
+        lines.push([fmt(bDb[i]), '700 ' + (mode >= 2 ? 12 : 10.5) + 'px', '#18212E']);
+        lines.forEach(([txt, font, color]) => {
+          ctx.font = font + ' "Pretendard Variable", Pretendard, sans-serif';
+          ctx.fillStyle = color; ctx.fillText(txt, x, y);
+          y -= parseFloat(font.split(' ')[1]) + 3;
+        });
+      }
+      ctx.restore();
+    }
+  };
+  const hasCpa = bCpa.some(v => v > 0);
+  const lineCount = nb <= 18 ? 3 : 2;
+
   draw('trendChart', {
     type: 'bar',
     data: { labels: labels, datasets: datasets },
+    plugins: [barLabels],
     options: {
       interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: hasCpa ? 8 : 4 } },
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 16, maxRotation: 0 } },
-        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+        y: { stacked: true, beginAtZero: true, grace: hasCpa ? (lineCount === 3 ? '22%' : '14%') : '8%', ticks: { precision: 0 } }
       },
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 12 } },
@@ -672,12 +735,14 @@ function renderTrend(dayBySrc) {
           callbacks: {
             title: items => titles[items[0].dataIndex],
             label: c => ' ' + c.dataset.label + ': ' + fmt(c.raw) + '건',
-            footer: items => '합계 ' + fmt(items.reduce((a, c) => a + c.raw, 0)) + '건'
+            footer: items => { const i = items[0].dataIndex; return ['합계 ' + fmt(bDb[i]) + '건'].concat(bSp[i] ? ['광고비 ' + fmt(bSp[i]) + '원', 'CPA ' + (bCpa[i] ? fmt(bCpa[i]) + '원' : '-')] : []); }
           }
         }
       }
     }
   });
+  $('trendNote').textContent = ($('trendNote').textContent ? $('trendNote').textContent + ' ' : '') +
+    (hasCpa ? '막대 위 숫자는 DB 수, 광고비, CPA예요. 막대가 좁으면 DB 수와 CPA(만원 단위)만, 더 좁으면 DB 수만 보여요.' : '막대 위 숫자는 DB 수예요.');
 }
 
 function barColors(arr) {
