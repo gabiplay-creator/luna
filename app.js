@@ -372,7 +372,23 @@ function buildLive() {
     if (nd < 2 || sa <= 0) return 1;
     return clamp((sd / nd) / (sa / na), 0.5, 1.8);
   }
+  // 실시간 채널(시간 정보 있음) vs 수기 채널(다음 날 하루치를 입력, 시간 없음) 구분
+  const realtime = D.names.map((_, c) => {
+    for (let d = today - FC.profileDays; d <= today; d++) for (let h = 0; h < 24; h++) if (cell(c, d, h) > 0) return true;
+    return false;
+  });
+  // 수기 채널은 마지막으로 입력된 날을 기준으로 평균을 냄 (아직 입력 안 된 어제를 0으로 보지 않도록)
+  const lastDay = D.names.map((_, c) => { for (let d = today - 1; d >= start; d--) if (dayTotal(c, d) > 0) return d; return null; });
+
   function forecast(c, day, x, F, withUntimed) {
+    if (!realtime[c]) {
+      const so = dayTotal(c, day) * (day === today ? 1 : 0);
+      const ref = lastDay[c] == null ? day : Math.min(day, lastDay[c] + 1);
+      const lv = level(c, ref, FC.levelDays);
+      const base = lv == null ? 0 : lv * weekdayFactor(c, ref, dowOf(day));
+      const fc = Math.max(so, base);
+      return { so: so, fc: fc, rem: fc - so, manual: true };
+    }
     // 오늘은 현재 시간대에 이미 들어온 DB를 모두 포함, 과거일 검증은 같은 시각까지만 비례 계산
     const timed = withUntimed ? cumBefore(c, day, Math.min(24, Math.floor(x) + 1)) : cumBefore(c, day, x);
     const so = timed + (withUntimed ? cell(c, day, 24) : 0);
@@ -393,11 +409,18 @@ function buildLive() {
   const Fnow = profile(today, t);
   const ch = D.names.map((_, c) => {
     const r = forecast(c, today, t, Fnow, true);
-    // 내일: 최근 6일 + 오늘 예측의 평균 × 내일 요일 보정
-    const s = Math.max(today - (FC.levelDays - 1), first[c]);
-    let sum = r.fc, k = 1;
-    if (isFinite(s)) for (let d = s; d < today; d++) { sum += dayTotal(c, d); k++; }
-    r.tomorrow = isFinite(first[c]) ? (sum / k) * weekdayFactor(c, today, dowOf(today + 1)) : 0;
+    if (r.manual) {
+      // 수기 채널: 마지막 입력일 기준 최근 7일 평균 × 내일 요일 보정
+      const ref = lastDay[c] == null ? today : lastDay[c] + 1;
+      const lv = level(c, ref, FC.levelDays);
+      r.tomorrow = lv == null ? 0 : lv * weekdayFactor(c, ref, dowOf(today + 1));
+    } else {
+      // 내일: 최근 6일 + 오늘 예측의 평균 × 내일 요일 보정
+      const s = Math.max(today - (FC.levelDays - 1), first[c]);
+      let sum = r.fc, k = 1;
+      if (isFinite(s)) for (let d = s; d < today; d++) { sum += dayTotal(c, d); k++; }
+      r.tomorrow = isFinite(first[c]) ? (sum / k) * weekdayFactor(c, today, dowOf(today + 1)) : 0;
+    }
     r.yAt = cumBefore(c, today - 1, t);
     r.yTotal = dayTotal(c, today - 1);
     return r;
@@ -450,7 +473,7 @@ function buildLive() {
     return { actual, path, yest, avg4 };
   }
 
-  return { today, t, Fnow, ch, rowStats, curves };
+  return { today, t, Fnow, ch, rowStats, curves, manualChs: D.names.filter((n, c) => !realtime[c] && lastDay[c] != null) };
 }
 
 function renderLive() {
@@ -467,7 +490,8 @@ function renderLive() {
   $('liveLead').innerHTML =
     `${D.asOf.label} 현재 <b>${fmt(all.so)}건</b>이 들어왔어요. 평소 이 시각이면 하루 DB의 약 ${Math.round(shareDone * 100)}%가 들어오는 시점이라, ` +
     `자정까지 <b>${fmt(all.rem)}건</b> 정도 더 들어와 <b class="hl">${fmt(all.fc)}건</b>으로 마감할 것으로 보여요${range}. ` +
-    `내일(${DOW[dowOf(L.today + 1)]})은 <b>${fmt(all.tomorrow)}건</b> 정도로 예상돼요.`;
+    `내일(${DOW[dowOf(L.today + 1)]})은 <b>${fmt(all.tomorrow)}건</b> 정도로 예상돼요.` +
+    (L.manualChs.length ? ` <span class="dim">(수기 입력 채널 ${L.manualChs.join(', ')}은 다음 날 입력되므로, 오늘·내일은 최근 입력 평균으로 예측에 포함했어요.)</span>` : '');
 
   const delta = (a, b) => {
     if (!b) return '';
