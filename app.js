@@ -222,6 +222,7 @@ function buildChips() {
 function applyPreset(p) {
   S.preset = p;
   if (p === 'all') { S.from = D.min; S.to = D.max; }
+  else if (p === 'yesterday') { S.from = S.to = Math.min(D.max, D.asOf.day - 1); }
   else if (p) { S.to = D.max; S.from = Math.max(D.min, D.max - (+p) + 1); }
   S.from = clamp(S.from, D.min, D.max); S.to = clamp(S.to, D.min, D.max);
   syncControls();
@@ -236,12 +237,26 @@ function syncControls() {
   press('#presets button', 'p', S.preset);
   press('#trendSeg button', 'v', S.trend);
   press('#stackSeg button', 'v', S.stack);
+  press('#dailySeg button', 'v', S.stack);
+  $('prevRange').disabled = S.from <= D.min;
+  $('nextRange').disabled = S.to >= D.max;
   press('#dimSeg button', 'v', S.dim);
   press('#cmpBaseSeg button', 'v', S.cmpBase);
   press('#cmpMetricSeg button', 'v', S.cmpMetric);
   document.querySelectorAll('#chips .chip').forEach(b => b.setAttribute('aria-pressed', String(S.src.has(+b.dataset.i))));
 }
 
+function shiftRange(dir) {
+  const span = S.to - S.from + 1;
+  let f = S.from + dir * span, t = S.to + dir * span;
+  if (t > D.max) { t = D.max; f = t - span + 1; }
+  if (f < D.min) { f = D.min; t = Math.min(D.max, f + span - 1); }
+  S.from = f; S.to = t; S.preset = null;
+  syncControls(); render();
+}
+$('prevRange').addEventListener('click', () => shiftRange(-1));
+$('nextRange').addEventListener('click', () => shiftRange(1));
+$('dailySeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.stack = b.dataset.v; syncControls(); render(); } });
 $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) applyPreset(b.dataset.p); });
 ['from', 'to'].forEach(id => $(id).addEventListener('change', () => {
   let f = strToDay($('from').value), t = strToDay($('to').value);
@@ -553,6 +568,7 @@ function render() {
   renderKpis(total, days, hourC, dowC, dupSeen);
   renderTrend(dayBySrc);
   renderSpendTrend(dayBySrc);
+  renderDaily(dayBySrc);
   renderDow(dowC, total);
   renderHour(hourC, noTime);
   renderShare(dimC);
@@ -1392,6 +1408,47 @@ $('miSave').addEventListener('click', async () => {
     msg.className = 'mi-msg err'; msg.textContent = '저장하지 못했어요: ' + (err.message || err);
   } finally { $('miSave').disabled = false; }
 });
+
+
+/* ---------- 일자별 DB · CPA 표 ---------- */
+function renderDaily(dayBySrc) {
+  const sel = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
+  const units = S.stack === 'group'
+    ? D.groups.map(g => ({ name: g.name, color: g.color, chs: g.idx.filter(c => S.src.has(c)) })).filter(u => u.chs.length)
+    : sel.map(c => ({ name: D.names[c], color: chColor(c), chs: [c] }));
+  const hasSpend = !!D.hasSpend;
+  const cell = (chs, d0, d1) => {
+    let db = 0, sp = 0, mdb = 0;
+    chs.forEach(c => {
+      for (let d = d0; d <= d1; d++) {
+        const n = dayBySrc[c][d - S.from] || 0; db += n;
+        const v = D.spendCh[c] && D.spendCh[c].get(d);
+        if (v) { sp += v; mdb += n; }
+      }
+    });
+    return { db, sp, cpa: mdb > 0 && sp > 0 ? sp / mdb : 0 };
+  };
+  const fmtCell = o => `<b>${fmt(o.db)}</b>` + (hasSpend ? `<span class="cpa">${o.cpa ? fmt(o.cpa) + '원' : '-'}</span>` : '');
+  const today = D.asOf.day;
+  const head = '<thead><tr><th class="dcol">일자</th><th class="tot">전체</th>' + (hasSpend ? '<th class="sp">광고비</th>' : '') +
+    units.map(u => `<th><i style="background:${u.color}"></i>${esc(u.name)}</th>`).join('') + '</tr></thead>';
+  const rowHtml = (label, cls, d0, d1) => {
+    const t = cell(sel, d0, d1);
+    return `<tr class="${cls}"><th class="dcol">${label}</th><td class="tot">${fmtCell(t)}</td>` +
+      (hasSpend ? `<td class="sp">${t.sp ? wonShort(t.sp) : '-'}</td>` : '') +
+      units.map(u => `<td>${fmtCell(cell(u.chs, d0, d1))}</td>`).join('') + '</tr>';
+  };
+  let body = '';
+  if (S.to > S.from) body += rowHtml(`기간 합계<span class="sub">${S.to - S.from + 1}일</span>`, 'sum', S.from, S.to);
+  for (let d = S.to; d >= S.from; d--) {
+    const w = dowOf(d), t = new Date(d * 864e5);
+    const label = `${t.getUTCMonth() + 1}/${t.getUTCDate()} <span class="dw${w >= 5 ? ' we' : ''}">${DOW[w]}</span>` + (d === today ? '<span class="tag">진행 중</span>' : '');
+    body += rowHtml(label, w === 6 ? 'sun' : '', d, d);
+  }
+  $('dailyTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  const days = S.to - S.from + 1;
+  $('dailyNote').textContent = days === 1 ? fmtDay(S.from) + ' (' + DOW[dowOf(S.from)] + ')' : fmtDay(S.from) + ' ~ ' + fmtDay(S.to) + ', ' + days + '일';
+}
 
 /* ---------- 자동 갱신 ---------- */
 setInterval(() => { if (S.auto && D && document.visibilityState === 'visible') load(false, true); }, AUTO_REFRESH_MIN * 60000);
