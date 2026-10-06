@@ -715,7 +715,11 @@ function renderTrend(dayBySrc) {
     }
   };
   const hasCpa = bCpa.some(v => v > 0);
-  const lineCount = nb <= 18 ? 3 : 2;
+  // 막대 위 라벨이 잘리지 않도록, 예상되는 줄 수만큼 위쪽 여백을 픽셀로 확보
+  const estW = Math.max(0, ($('trendChart').parentNode.clientWidth || 800) - 60) / Math.max(1, nb);
+  const estMode = estW >= 60 ? 3 : estW >= 30 ? 2 : estW >= 18 ? 1 : 0;
+  const lines = !estMode ? 0 : !hasCpa ? 1 : estMode >= 3 ? 3 : estMode === 2 ? 2 : 1;
+  const topPad = lines ? 10 + lines * 15 : 4;
 
   draw('trendChart', {
     type: 'bar',
@@ -723,10 +727,10 @@ function renderTrend(dayBySrc) {
     plugins: [barLabels],
     options: {
       interaction: { mode: 'index', intersect: false },
-      layout: { padding: { top: hasCpa ? 8 : 4 } },
+      layout: { padding: { top: topPad } },
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 16, maxRotation: 0 } },
-        y: { stacked: true, beginAtZero: true, grace: hasCpa ? (lineCount === 3 ? '22%' : '14%') : '8%', ticks: { precision: 0 } }
+        y: { stacked: true, beginAtZero: true, grace: '4%', ticks: { precision: 0 } }
       },
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 12 } },
