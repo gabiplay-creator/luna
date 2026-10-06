@@ -1235,8 +1235,8 @@ function renderGoal() {
 
   const kpi = (l, v, n, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
   $('goalKpis').innerHTML =
-    kpi(monthLabel + ' 목표', fmt(totalGoal), '하루 평균 ' + fmt(totalGoal / dim) + '건') +
-    kpi('어제까지 달성', fmt(all.done), (all.rate * 100).toFixed(1) + '% (' + passed + '일)') +
+    kpi(monthLabel + ' 목표', fmt(totalGoal), '목표 기준 하루 ' + fmt(totalGoal / dim) + '건 (' + dim + '일)') +
+    kpi('어제까지 달성', fmt(all.done), (all.rate * 100).toFixed(1) + '%, ' + passed + '일간 실제 하루 평균 ' + fmt(passed ? all.done / passed : 0) + '건') +
     kpi('남은 수량', fmt(all.left), '오늘 포함 ' + daysLeft + '일') +
     kpi('하루 필요', fmt(Math.ceil(all.need)), '최근 7일 평균 ' + fmt(all.avg7) + '건', 'hero') +
     kpi('오늘', fmt(all.todayNow) + ' / ' + fmt(all.todayFc), `예측 마감, 필요 대비 <span class="${todayGap >= 0 ? 'up' : 'down'}">${todayGap >= 0 ? '+' : ''}${fmt(todayGap)}</span>`);

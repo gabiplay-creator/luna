@@ -311,3 +311,4 @@ td .dim, .dim { color: var(--muted); font-weight: 400; }
   #goalTable .xm { display: none; }
   .mini { display: none; }
 }
+@media (max-width: 960px) { .goal-kpis .kpi:last-child { grid-column: 1 / -1; } }
