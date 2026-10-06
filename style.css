@@ -290,3 +290,24 @@ li.empty-li { display: block; color: var(--muted); }
 .cov { display: inline-block; margin-left: 5px; font-size: 10.5px; font-weight: 500; color: #9A5B00; background: #FFF1D6; border-radius: 4px; padding: 0 5px; vertical-align: 1px; }
 td .dim, .dim { color: var(--muted); font-weight: 400; }
 @media (max-width: 720px) { .cov { display: block; width: fit-content; margin: 2px 0 0 auto; } }
+
+/* ---------- v17: 목표 ---------- */
+.goal-top { margin-bottom: 16px; }
+.goal-kpis { margin: 4px 0 16px; }
+.goal-kpis .kpi.hero { background: #F1F5FE; }
+.goal-kpis .kpi.hero .v { color: var(--accent); }
+.goal-kpis .n .up, .goal-kpis .n .down { font-weight: 600; }
+.goal-bar .gb-track { position: relative; height: 14px; background: #E3E9F2; border-radius: 7px; overflow: visible; }
+.gb-done { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); border-radius: 7px 0 0 7px; }
+.gb-today { position: absolute; top: 0; bottom: 0; background: #A9BDEE; }
+.gb-mark { position: absolute; top: -5px; bottom: -5px; width: 2px; background: #0E8F72; transform: translateX(-1px); }
+.gb-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.gb-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.lg-done { background: var(--ink); } .lg-today { background: #A9BDEE; } .lg-mark { background: #0E8F72; width: 3px !important; }
+.mini { display: inline-block; width: 56px; height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-right: 6px; vertical-align: 1px; }
+.mini span { display: block; height: 100%; background: var(--accent); }
+#goalTable .xm, #goalTable .x { }
+@media (max-width: 720px) {
+  #goalTable .xm { display: none; }
+  .mini { display: none; }
+}

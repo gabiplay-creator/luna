@@ -31,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: location.hash === '#rank' ? 'rank' : 'live', rankKey: 'all' };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: ['#rank', '#goal'].includes(location.hash) ? location.hash.slice(1) : 'live', rankKey: 'all' };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -264,23 +264,29 @@ $('chips').addEventListener('click', e => {
   syncControls(); render();
 });
 $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
-function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); }
+function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); renderGoal(); }
 $('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
 $('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
 $('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
 document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page, true); });
-window.addEventListener('hashchange', () => showPage(location.hash === '#rank' ? 'rank' : 'live', false));
+window.addEventListener('hashchange', () => showPage(['#rank', '#goal'].includes(location.hash) ? location.hash.slice(1) : 'live', false));
 
 function showPage(p, push) {
   S.page = p;
-  $('page-live').hidden = p !== 'live';
-  $('page-rank').hidden = p !== 'rank';
+  ['live', 'rank', 'goal'].forEach(k => { $('page-' + k).hidden = p !== k; });
   document.querySelectorAll('.tabs [data-page]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === p)));
-  if (push) history.replaceState(null, '', p === 'rank' ? '#rank' : location.pathname + location.search);
+  if (push) history.replaceState(null, '', p === 'live' ? location.pathname + location.search : '#' + p);
   if (p === 'rank') renderRank();
+  else if (p === 'goal') renderGoal();
   else Object.values(charts).forEach(c => c.resize());
   if (push) window.scrollTo(0, 0);
 }
+$('goalTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-kids="1"]'); if (!tr) return;
+  const key = tr.dataset.key;
+  if (S.open.has(key)) S.open.delete(key); else S.open.add(key);
+  renderGoal(); renderLive(); renderSpend();
+});
 const segHandler = (id, key) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S[key] = b.dataset.v; syncControls(); render(); } });
 segHandler('trendSeg', 'trend'); segHandler('stackSeg', 'stack'); segHandler('dimSeg', 'dim');
 segHandler('cmpBaseSeg', 'cmpBase'); segHandler('cmpMetricSeg', 'cmpMetric');
@@ -760,7 +766,7 @@ function renderReport() {
   $('reportTable').innerHTML = '<thead><tr><th>채널</th><th>그룹</th><th>인식</th><th>날짜 인식 실패</th><th>시간 없음</th><th>중복 연락처</th></tr></thead><tbody>' +
     D.report.map(r => {
       const c = D.sources.indexOf(r.name), g = c >= 0 ? D.groups[D.groupOf[c]] : null;
-      const auto = c >= 0 && !CHANNEL_COLORS[D.names[c]] ? ' (자동 인식)' : '';
+      const auto = r.manual ? ' (수동 입력)' : (c >= 0 && !CHANNEL_COLORS[D.names[c]] ? ' (자동 인식)' : '') + (r.manualRows ? ' + 수동 ' + fmt(r.manualRows) + '건' : '');
       return `<tr><td>${esc(shortName(r.name))}${r.missing ? ' (탭 없음)' : ''}${auto}</td><td>${g ? esc(g.name) : '-'}</td><td>${fmt(r.rows)}</td><td>${fmt(r.skipped)}</td><td>${fmt(r.noTime)}</td><td>${fmt(r.dup)}</td></tr>`;
     }).join('') + '</tbody>';
 }
@@ -1145,6 +1151,173 @@ function renderSpendTrend(dayBySrc) {
       }
     }
   });
+}
+
+/* =========================================================
+ * 3페이지: 목표
+ * ========================================================= */
+function goalTargetRow(name) {
+  const n = String(name).trim();
+  if (n === '전체') return D.hier[0];
+  return D.hier.find(r => r.name === n || 'GL(' + r.name + ')' === n) || null;
+}
+
+function renderGoal() {
+  if (!D || S.page !== 'goal') return;
+  const today = D.asOf.day, tt = new Date(today * 864e5);
+  const y = tt.getUTCFullYear(), m = tt.getUTCMonth() + 1, mKey = y + '-' + pad(m);
+  const mStart = today - (tt.getUTCDate() - 1);
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate(), mEnd = mStart + dim - 1;
+  const passed = today - mStart;            // 어제까지 지난 날 수
+  const daysLeft = mEnd - today + 1;        // 오늘 포함 남은 날 수
+  const goals = (D.goals || []).filter(g => g.month === mKey);
+  const goalOf = name => { const g = goals.find(x => x.target === name || x.target === 'GL(' + name + ')'); return g ? g.db : null; };
+
+  // 채널별 이번 달 일별 DB
+  const nc = D.names.length, A = D.A;
+  const daily = D.names.map(() => new Float64Array(dim));
+  for (let i = 0; i < D.n; i++) {
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i]; if (d < mStart || d > today) continue;
+    daily[A.src[i]][d - mStart]++;
+  }
+  const L = buildLive();
+  const stat = chs => {
+    let done = 0, todayNow = 0;
+    chs.forEach(c => {
+      for (let j = 0; j < passed; j++) done += daily[c][j];
+      todayNow += daily[c][passed] || 0;
+    });
+    const st = L.rowStats(chs);
+    return { done, todayNow, todayFc: st.fc, tomorrow: st.tomorrow };
+  };
+  // 최근 7일(어제까지) 채널별 합계
+  const sum7 = new Float64Array(nc);
+  for (let i = 0; i < D.n; i++) {
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i]; if (d >= today - 7 && d < today) sum7[A.src[i]]++;
+  }
+  const calc = (chs, goal) => {
+    const s = stat(chs);
+    const avg7 = chs.reduce((a, c) => a + sum7[c], 0) / 7;
+    const proj = s.done + Math.max(s.todayFc, s.todayNow) + avg7 * (mEnd - today);
+    const o = Object.assign(s, { goal, avg7, proj });
+    if (goal) {
+      o.rate = s.done / goal;
+      o.left = Math.max(0, goal - s.done);
+      o.need = o.left / daysLeft;
+      o.paceTarget = goal * passed / dim;     // 어제까지 있어야 할 누적
+      o.projRate = proj / goal;
+    }
+    return o;
+  };
+
+  const monthLabel = m + '월';
+  const totalGoal = goalOf('전체');
+  const all = calc(D.hier[0].ch, totalGoal);
+  const yLabel = (() => { const t = new Date((today - 1) * 864e5); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate(); })();
+  $('goalMeta').textContent = `${fmtDay(mStart)} ~ ${fmtDay(mEnd)} | 오늘 포함 남은 ${daysLeft}일` +
+    (D.manualDb && D.manualDb.used ? ` | 수동 입력 ${fmt(D.manualDb.used)}건 포함` : '');
+
+  if (!totalGoal) {
+    $('goalLead').innerHTML = `${monthLabel} 목표가 아직 없어요. 시트의 <b>목표</b> 탭에 <b>${mKey} | 전체 | 목표 DB 수</b>를 입력하면 여기에 표시돼요. (어제까지 ${fmt(all.done)}건)`;
+    $('goalKpis').innerHTML = ''; $('goalBar').innerHTML = ''; $('goalTable').innerHTML = '';
+    ['goalCumChart', 'goalDailyChart'].forEach(id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } });
+    return;
+  }
+  const ahead = all.done - all.paceTarget;
+  const todayGap = all.todayFc - all.need;
+  $('goalLead').innerHTML =
+    `${monthLabel} 목표 <b>${fmt(totalGoal)}건</b> 중 어제(${yLabel})까지 <b>${fmt(all.done)}건</b>(${(all.rate * 100).toFixed(1)}%)을 달성했어요. ` +
+    `남은 <b>${fmt(all.left)}건</b>을 채우려면 오늘부터 <b class="hl">하루 ${fmt(Math.ceil(all.need))}건</b>씩 필요해요. ` +
+    `날짜 기준으로는 어제까지 ${fmt(all.paceTarget)}건이 있어야 해서 <b class="${ahead >= 0 ? 'up' : 'down'}">${ahead >= 0 ? fmt(ahead) + '건 앞서' : fmt(-ahead) + '건 뒤처져'}</b> 있어요. ` +
+    `최근 7일 평균(하루 ${fmt(all.avg7)}건)이 이어지면 월말 약 <b>${fmt(all.proj)}건</b>(${(all.projRate * 100).toFixed(0)}%)으로 예상돼요.`;
+
+  const kpi = (l, v, n, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
+  $('goalKpis').innerHTML =
+    kpi(monthLabel + ' 목표', fmt(totalGoal), '하루 평균 ' + fmt(totalGoal / dim) + '건') +
+    kpi('어제까지 달성', fmt(all.done), (all.rate * 100).toFixed(1) + '% (' + passed + '일)') +
+    kpi('남은 수량', fmt(all.left), '오늘 포함 ' + daysLeft + '일') +
+    kpi('하루 필요', fmt(Math.ceil(all.need)), '최근 7일 평균 ' + fmt(all.avg7) + '건', 'hero') +
+    kpi('오늘', fmt(all.todayNow) + ' / ' + fmt(all.todayFc), `예측 마감, 필요 대비 <span class="${todayGap >= 0 ? 'up' : 'down'}">${todayGap >= 0 ? '+' : ''}${fmt(todayGap)}</span>`);
+
+  const pct = v => clamp(v * 100, 0, 100).toFixed(2) + '%';
+  $('goalBar').innerHTML =
+    `<div class="gb-track"><span class="gb-done" style="width:${pct(all.rate)}"></span>` +
+    `<span class="gb-today" style="left:${pct(all.rate)};width:${pct(all.todayNow / totalGoal)}"></span>` +
+    `<i class="gb-mark" style="left:${pct(all.paceTarget / totalGoal)}" title="어제까지 있어야 할 위치"></i></div>` +
+    `<div class="gb-legend"><span><i class="lg-done"></i>어제까지 ${(all.rate * 100).toFixed(1)}%</span><span><i class="lg-today"></i>오늘 현재 +${fmt(all.todayNow)}</span><span><i class="lg-mark"></i>날짜 기준 목표 위치 ${(all.paceTarget / totalGoal * 100).toFixed(1)}%</span></div>`;
+
+  // 누적 차트: 실제 누적, 목표 직선, 필요 경로, 예상 경로
+  const days = [...Array(dim).keys()];
+  const dayTot = days.map(j => D.hier[0].ch.reduce((a, c) => a + daily[c][j], 0));
+  let acc = 0;
+  const cum = days.map(j => { if (j > passed) return null; acc += dayTot[j]; return acc; });
+  const target = days.map(j => totalGoal * (j + 1) / dim);
+  const needPath = days.map(j => j < passed - 1 ? null : j === passed - 1 ? all.done : all.done + all.need * (j - passed + 1));
+  const projPath = days.map(j => j < passed - 1 ? null : j === passed - 1 ? all.done : j === passed ? all.done + all.todayFc : all.done + all.todayFc + all.avg7 * (j - passed));
+  const labels = days.map(j => (m) + '/' + (j + 1));
+  draw('goalCumChart', {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '실제 누적', data: cum, borderColor: '#18212E', backgroundColor: '#18212E', borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
+        { label: '목표(날짜 비례)', data: target, borderColor: '#A3AEBD', borderWidth: 1.5, borderDash: [4, 3], pointRadius: 0 },
+        { label: '목표 달성 필요 경로', data: needPath, borderColor: '#0E8F72', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, spanGaps: true },
+        { label: '현재 페이스 예상', data: projPath, borderColor: '#2F5BD3', borderWidth: 2, borderDash: [2, 3], pointRadius: 0, spanGaps: true }
+      ]
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 11 } }, y: { beginAtZero: true, ticks: { callback: v => fmt(v) } } },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 14, boxHeight: 2, padding: 14 } },
+        tooltip: { filter: c => c.raw != null, callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmt(c.raw) + '건' } }
+      }
+    }
+  });
+  draw('goalDailyChart', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: '일별 DB', data: days.map(j => j <= passed ? dayTot[j] : null), backgroundColor: days.map(j => j === passed ? '#A9BDEE' : dayTot[j] >= totalGoal / dim ? '#2F5BD3' : '#7D9AE8'), borderRadius: 2, order: 2 },
+        { type: 'line', label: '남은 기간 하루 필요', data: days.map(j => j >= passed ? all.need : null), borderColor: '#0E8F72', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, order: 1 },
+        { type: 'line', label: '월 목표 하루 평균', data: days.map(() => totalGoal / dim), borderColor: '#A3AEBD', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, order: 1 }
+      ]
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 11 } }, y: { beginAtZero: true, ticks: { precision: 0 } } },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 12, boxHeight: 8, padding: 14 } },
+        tooltip: { filter: c => c.raw != null, callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmt(c.raw) + '건' + (c.dataIndex === passed && c.dataset.type === 'bar' ? ' (오늘, 진행 중)' : '') } }
+      }
+    }
+  });
+
+  // 그룹·채널별 표 (목표 탭에 해당 구분 목표가 있으면 달성률 계산)
+  $('goalTable').innerHTML =
+    '<thead><tr><th>구분</th><th class="xm">목표</th><th>어제까지</th><th class="x">비중</th><th>달성률</th><th class="x">남은</th><th>하루 필요</th><th class="xm">최근 7일 평균</th><th class="x">월말 예상</th></tr></thead><tbody>' +
+    D.hier.filter(r => !r.parent || S.open.has(r.parent)).map(r => {
+      const g = r.lv === 0 ? totalGoal : goalOf(r.name);
+      const s = calc(r.ch, g);
+      const isOpen = S.open.has(r.key);
+      const caret = r.kids ? `<span class="caret${isOpen ? ' open' : ''}" aria-hidden="true">▸</span>` : '';
+      const dot = r.color ? `<i style="background:${r.color}"></i>` : '';
+      const share = all.done ? s.done / all.done : 0;
+      return `<tr class="lv${r.lv}${r.kids ? ' parent' : ''}" data-key="${esc(r.key)}"${r.kids ? ' data-kids="1"' : ''}>` +
+        `<td class="name">${caret}${dot}${esc(r.name)}</td>` +
+        `<td class="xm">${g ? fmt(g) : '<span class="dim">-</span>'}</td>` +
+        `<td>${fmt(s.done)}<span class="m">${g ? '목표 ' + fmt(g) : (share * 100).toFixed(1) + '%'}</span></td>` +
+        `<td class="x dim">${(share * 100).toFixed(1)}%</td>` +
+        `<td>${g ? `<div class="mini"><span style="width:${pct(s.rate)}"></span></div>${(s.rate * 100).toFixed(1)}%` : '<span class="dim">목표 없음</span>'}</td>` +
+        `<td class="x">${g ? fmt(s.left) : '-'}</td>` +
+        `<td class="fc">${g ? fmt(Math.ceil(s.need)) : '<span class="dim">-</span>'}<span class="m">7일 평균 ${fmt(s.avg7)}</span></td>` +
+        `<td class="xm">${fmt(s.avg7)}</td>` +
+        `<td class="x">${fmt(s.proj)}${g ? ` <span class="${s.projRate >= 1 ? 'up' : 'down'}">${(s.projRate * 100).toFixed(0)}%</span>` : ''}</td></tr>`;
+    }).join('') + '</tbody>';
 }
 
 /* ---------- 자동 갱신 ---------- */

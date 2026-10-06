@@ -22,6 +22,7 @@
     <nav class="tabs" role="tablist" aria-label="페이지">
       <button role="tab" data-page="live" aria-selected="true">실시간 현황</button>
       <button role="tab" data-page="rank" aria-selected="false">순위</button>
+      <button role="tab" data-page="goal" aria-selected="false">목표</button>
     </nav>
     <div class="head-right">
       <label class="toggle"><input type="checkbox" id="autoRefresh" checked> 5분마다 자동 갱신</label>
@@ -178,6 +179,29 @@
       <section class="card"><div class="chead"><h2>시간당 TOP 10</h2><span class="note" id="rkHourNote"></span></div><ol class="rank" id="rkHour"></ol></section>
     </div>
     <p class="note rank-foot">전체 통계 기간을 기준으로 집계해요. 막대는 1위 대비 길이이고, 색은 하위 그룹·채널의 구성 비율이에요. "평균 대비"는 같은 단위(일·주·월·시간)의 평균과 비교한 값이며, 진행 중인 오늘·이번 주·이번 달은 평균 계산에서 뺍니다.</p>
+  </div>
+  <div id="page-goal" hidden>
+    <section class="card goal-top">
+      <div class="chead"><h2>이번 달 목표</h2><span class="note" id="goalMeta"></span></div>
+      <p class="live-lead" id="goalLead"></p>
+      <section class="kpis goal-kpis" id="goalKpis" aria-label="목표 요약"></section>
+      <div class="goal-bar" id="goalBar"></div>
+    </section>
+    <div class="grid">
+      <section class="card full">
+        <div class="chead"><h2>누적 달성 추이</h2><span class="note">초록 점선을 따라가면 목표 달성</span></div>
+        <div class="cbox tall"><canvas id="goalCumChart"></canvas></div>
+      </section>
+      <section class="card full">
+        <div class="chead"><h2>일별 DB와 하루 필요량</h2><span class="note">진한 막대는 월 목표 하루 평균 이상인 날</span></div>
+        <div class="cbox"><canvas id="goalDailyChart"></canvas></div>
+      </section>
+      <section class="card full">
+        <div class="chead"><h2>그룹·채널별 달성</h2><span class="note">목표 탭에 주력군·채널별 목표를 넣으면 달성률이 계산돼요</span></div>
+        <div class="tbl live-tbl"><table id="goalTable"></table></div>
+      </section>
+    </div>
+    <p class="note rank-foot">목표는 시트의 <b>목표</b> 탭(월 | 구분 | 목표DB)에서 읽어요. "어제까지"는 오늘을 뺀 확정 수량이고, 하루 필요량은 남은 수량을 오늘 포함 남은 날 수로 나눈 값이에요. 자동 시트가 없는 채널은 <b>수동DB</b> 탭(일자 | 채널 | DB수) 입력분으로 계산하고, 같은 날짜·채널에 자동 데이터가 생기면 자동 데이터를 우선해요. 위쪽 중복 제외 옵션이 적용돼요.</p>
   </div>
 </div>
 

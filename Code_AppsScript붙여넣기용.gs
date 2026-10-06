@@ -112,6 +112,7 @@ function getDashboardData() {
   const report = [];
   const maxDay = Math.floor(Date.now() / 86400000) + 2; // 미래 날짜 오입력 방지
   const SOURCE_SHEETS = getSourceSheets_(ss);
+  const autoHas = new Set(); // 자동 탭에 데이터가 있는 '채널,일자'
 
   SOURCE_SHEETS.forEach(function (name, s) {
     const sh = ss.getSheetByName(name);
@@ -155,13 +156,34 @@ function getDashboardData() {
       const camp = cCamp >= 0 ? campaigns.id(r[cCamp]) : -1;
 
       out.push(s + ',' + t.day + ',' + t.hour + ',' + note + ',' + plat + ',' + camp + ',' + dup);
+      autoHas.add(s + ',' + t.day);
       rows++;
       if (t.hour < 0) noTime++;
     }
     report.push({ name: name, rows: rows, skipped: skipped, noTime: noTime, dup: dupCount });
   });
 
+  // ---- 수동DB 탭: 자동 시트가 아직 없는 채널·날짜를 손으로 채움 (같은 채널·날짜에 자동 데이터가 있으면 자동 우선) ----
+  const manualInfo = { tab: MANUAL_DB_TAB, used: 0, skipped: 0 };
+  const idxByShort = {};
+  SOURCE_SHEETS.forEach(function (n, i) { idxByShort[shortName_(n)] = i; });
+  readManualDb_(ss).forEach(function (m) {
+    const key = shortName_(m.ch);
+    let s = idxByShort[key];
+    if (s === undefined) {
+      s = SOURCE_SHEETS.length; SOURCE_SHEETS.push(key); idxByShort[key] = s;
+      report.push({ name: key, rows: 0, skipped: 0, noTime: 0, dup: 0, manual: true });
+    }
+    if (autoHas.has(s + ',' + m.day)) { manualInfo.skipped += m.n; return; }
+    for (let i = 0; i < m.n; i++) out.push(s + ',' + m.day + ',-1,-1,-1,-1,0');
+    const rep = report.filter(function (r) { return shortName_(r.name) === key; })[0];
+    if (rep) { rep.manualRows = (rep.manualRows || 0) + m.n; if (rep.manual) { rep.rows += m.n; rep.noTime += m.n; } }
+    manualInfo.used += m.n;
+  });
+
   return JSON.stringify({
+    goals: readGoals_(ss),
+    manualDb: manualInfo,
     generatedAt: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy.MM.dd HH:mm'),
     buildSec: Math.round((Date.now() - t0) / 100) / 10,
     sources: SOURCE_SHEETS,
@@ -172,6 +194,54 @@ function getDashboardData() {
     rows: out.join(';'),
     spend: readSpend_(ss)
   });
+}
+
+// 수동 DB 입력 탭: A열 일자 | B열 채널(K, MT, PLAN, 홈페이지 …) | C열 DB수
+const MANUAL_DB_TAB = '수동DB';
+// 목표 탭: A열 월(2026-10) | B열 구분(전체, 주력군, 주력1팀, 지원군, G …) | C열 목표DB
+const GOAL_TAB = '목표';
+
+function shortName_(n) {
+  const m = String(n == null ? '' : n).trim().match(/^GL\s*[\(\[]\s*(.+?)\s*[\)\]]$/i);
+  return m ? m[1] : String(n == null ? '' : n).trim();
+}
+
+/** '26.10.01'처럼 두 자리 연도도 받는 날짜 변환 */
+function dayOf_(v) {
+  const t = parseTs(v);
+  if (t) return t.day;
+  const m = String(v == null ? '' : v).trim().match(/^(\d{2})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/);
+  return m ? Math.floor(Date.UTC(2000 + Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000) : null;
+}
+
+function readManualDb_(ss) {
+  const sh = ss.getSheetByName(MANUAL_DB_TAB);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const sum = {};
+  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+    const day = dayOf_(r[0]);
+    const ch = String(r[1] == null ? '' : r[1]).trim();
+    const n = Math.round(Number(String(r[2] == null ? '' : r[2]).replace(/[^0-9.\-]/g, '')));
+    if (day == null || !ch || !(n > 0)) return;
+    const k = day + '|' + ch;
+    sum[k] = (sum[k] || 0) + n;
+  });
+  return Object.keys(sum).map(function (k) { const p = k.split('|'); return { day: Number(p[0]), ch: p.slice(1).join('|'), n: sum[k] }; });
+}
+
+function readGoals_(ss) {
+  const sh = ss.getSheetByName(GOAL_TAB);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const out = [];
+  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+    let month = null;
+    if (r[0] instanceof Date && !isNaN(r[0])) month = Utilities.formatDate(r[0], 'Asia/Seoul', 'yyyy-MM');
+    else { const m = String(r[0] == null ? '' : r[0]).match(/(\d{4})\D+(\d{1,2})/); if (m) month = m[1] + '-' + ('0' + m[2]).slice(-2); }
+    const target = String(r[1] == null ? '' : r[1]).trim() || '전체';
+    const db = Number(String(r[2] == null ? '' : r[2]).replace(/[^0-9.]/g, ''));
+    if (month && db > 0) out.push({ month: month, target: target, db: db });
+  });
+  return out;
 }
 
 // 같은 날짜·채널 광고비가 여러 탭에 있으면 앞쪽 탭 값을 씁니다 (API 자동 수집 > 수기 입력).
