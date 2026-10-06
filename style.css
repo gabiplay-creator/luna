@@ -312,3 +312,29 @@ td .dim, .dim { color: var(--muted); font-weight: 400; }
   .mini { display: none; }
 }
 @media (max-width: 960px) { .goal-kpis .kpi:last-child { grid-column: 1 / -1; } }
+
+/* ---------- v19: 수동 DB 입력 ---------- */
+.mi-rows { display: grid; gap: 8px; }
+.mi-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 120px 32px; gap: 8px; align-items: center; }
+.mi-row input { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--panel); color: var(--ink); min-width: 0; }
+.mi-row input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.mi-del { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; height: 34px; color: var(--muted); font-size: 16px; }
+.mi-del:hover { color: #C2413A; border-color: #E6B8B4; }
+.mi-actions { margin-top: 12px; }
+.mi-spacer { flex: 1; }
+.mi-pin { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.mi-pin input { font: inherit; width: 110px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; padding: 7px 18px; }
+.btn.primary:disabled { opacity: .5; cursor: progress; }
+.mi-msg { min-height: 20px; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.mi-msg.ok { color: #0E8F72; } .mi-msg.err { color: #C2413A; }
+.mi-list { margin-top: 12px; }
+.mi-list summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.mi-list .tbl { max-height: 280px; }
+@media (max-width: 720px) {
+  .mi-row { grid-template-columns: minmax(0, 1fr) 90px 40px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .mi-row .mi-date { grid-column: 1 / -1; }
+  .mi-spacer { display: none; }
+  .mi-pin { width: 100%; } .mi-pin input { flex: 1; width: auto; }
+  .btn.primary { width: 100%; padding: 10px; }
+}

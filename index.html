@@ -200,6 +200,23 @@
         <div class="chead"><h2>그룹·채널별 달성</h2><span class="note">목표 탭에 주력군·채널별 목표를 넣으면 달성률이 계산돼요</span></div>
         <div class="tbl live-tbl"><table id="goalTable"></table></div>
       </section>
+      <section class="card full" id="manualCard">
+        <div class="chead"><h2>수동 DB 입력</h2><span class="note">자동 시트가 없는 채널의 일별 DB를 입력해요. 같은 날짜·채널에 자동 데이터가 생기면 자동이 우선이에요.</span></div>
+        <div class="mi-rows" id="miRows"></div>
+        <div class="frow mi-actions">
+          <button class="linkbtn" id="miAdd">+ 줄 추가</button>
+          <span class="mi-spacer"></span>
+          <label class="mi-pin">입력 비밀번호 <input type="password" id="miPin" inputmode="numeric" autocomplete="off"></label>
+          <label class="toggle"><input type="checkbox" id="miRemember"> 이 기기에서 기억</label>
+          <button class="btn primary" id="miSave">저장</button>
+        </div>
+        <p class="mi-msg" id="miMsg" role="status"></p>
+        <datalist id="miChannels"></datalist>
+        <details class="mi-list" open>
+          <summary>최근 입력 내역</summary>
+          <div class="tbl"><table id="miTable"></table></div>
+        </details>
+      </section>
     </div>
     <p class="note rank-foot">목표는 시트의 <b>목표</b> 탭(월 | 구분 | 목표DB)에서 읽어요. "어제까지"는 오늘을 뺀 확정 수량이고, 하루 필요량은 남은 수량을 오늘 포함 남은 날 수로 나눈 값이에요. 자동 시트가 없는 채널은 <b>수동DB</b> 탭(일자 | 채널 | DB수) 입력분으로 계산하고, 같은 날짜·채널에 자동 데이터가 생기면 자동 데이터를 우선해요. 위쪽 중복 제외 옵션이 적용돼요.</p>
   </div>

@@ -164,7 +164,8 @@ function getDashboardData() {
   });
 
   // ---- 수동DB 탭: 자동 시트가 아직 없는 채널·날짜를 손으로 채움 (같은 채널·날짜에 자동 데이터가 있으면 자동 우선) ----
-  const manualInfo = { tab: MANUAL_DB_TAB, used: 0, skipped: 0 };
+  const manualInfo = { tab: MANUAL_DB_TAB, used: 0, skipped: 0, entries: [] };
+  const recentFrom = Math.floor(Date.now() / 86400000) - 62;
   const idxByShort = {};
   SOURCE_SHEETS.forEach(function (n, i) { idxByShort[shortName_(n)] = i; });
   readManualDb_(ss).forEach(function (m) {
@@ -174,7 +175,9 @@ function getDashboardData() {
       s = SOURCE_SHEETS.length; SOURCE_SHEETS.push(key); idxByShort[key] = s;
       report.push({ name: key, rows: 0, skipped: 0, noTime: 0, dup: 0, manual: true });
     }
-    if (autoHas.has(s + ',' + m.day)) { manualInfo.skipped += m.n; return; }
+    const autoWins = autoHas.has(s + ',' + m.day);
+    if (m.day >= recentFrom) manualInfo.entries.push({ day: m.day, ch: key, n: m.n, used: !autoWins });
+    if (autoWins) { manualInfo.skipped += m.n; return; }
     for (let i = 0; i < m.n; i++) out.push(s + ',' + m.day + ',-1,-1,-1,-1,0');
     const rep = report.filter(function (r) { return shortName_(r.name) === key; })[0];
     if (rep) { rep.manualRows = (rep.manualRows || 0) + m.n; if (rep.manual) { rep.rows += m.n; rep.noTime += m.n; } }
@@ -338,3 +341,64 @@ Dict.prototype.id = function (v) {
   if (!this.map.has(k)) { this.map.set(k, this.list.length); this.list.push(k); }
   return this.map.get(k);
 };
+
+/* ================= 대시보드에서 수동 DB 입력 (POST) ================= */
+// 비밀번호: Apps Script 왼쪽 톱니바퀴(프로젝트 설정) → 스크립트 속성 → INPUT_PIN 에 원하는 숫자/문자 입력
+function doPost(e) {
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (ACCESS_TOKEN && body.token !== ACCESS_TOKEN) return json_({ error: 'unauthorized' });
+    const pin = PropertiesService.getScriptProperties().getProperty('INPUT_PIN');
+    if (!pin) return json_({ error: 'Apps Script 스크립트 속성에 INPUT_PIN(입력 비밀번호)을 먼저 설정해 주세요.' });
+    if (String(body.pin || '') !== String(pin)) return json_({ error: '비밀번호가 맞지 않아요.' });
+    if (body.action === 'manualDb') {
+      const saved = upsertManualDb_(Array.isArray(body.rows) ? body.rows.slice(0, 200) : []);
+      buildAndCache_(true); // 저장 즉시 대시보드 데이터 다시 계산
+      return json_({ ok: true, saved: saved });
+    }
+    return json_({ error: '알 수 없는 요청이에요.' });
+  } catch (err) {
+    return json_({ error: String(err && err.message ? err.message : err) });
+  }
+}
+
+/** 같은 일자·채널이 이미 있으면 덮어쓰고, DB수 0이면 그 줄을 지웁니다. */
+function upsertManualDb_(rows) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(MANUAL_DB_TAB);
+  if (!sh) { sh = ss.insertSheet(MANUAL_DB_TAB); sh.getRange(1, 1, 1, 3).setValues([['일자', '채널', 'DB수']]); }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const fmtDay = function (day) { return Utilities.formatDate(new Date(day * 86400000), 'UTC', 'yyyy-MM-dd'); };
+    const map = {}, order = [];
+    if (sh.getLastRow() > 1) {
+      sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+        const day = dayOf_(r[0]), ch = shortName_(r[1]);
+        if (day == null || !ch) return;
+        const k = day + '|' + ch;
+        if (!(k in map)) order.push(k);
+        map[k] = [fmtDay(day), ch, Number(String(r[2]).replace(/[^0-9.\-]/g, '')) || 0, r[3] == null ? '' : r[3]];
+      });
+    }
+    let saved = 0;
+    const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+    rows.forEach(function (x) {
+      const day = dayOf_(x.date), ch = shortName_(x.ch), n = Math.round(Number(x.n));
+      if (day == null || !ch || !isFinite(n) || n < 0) return;
+      const k = day + '|' + ch;
+      if (n === 0) { delete map[k]; saved++; return; }
+      if (!(k in map)) order.push(k);
+      map[k] = [fmtDay(day), ch, n, '대시보드 입력 ' + now];
+      saved++;
+    });
+    const all = order.filter(function (k) { return k in map; }).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])); });
+    sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 4).clearContent();
+    if (all.length) {
+      sh.getRange(2, 1, all.length, 1).setNumberFormat('@');
+      sh.getRange(2, 1, all.length, 4).setValues(all);
+    }
+    return saved;
+  } finally { lock.releaseLock(); }
+}

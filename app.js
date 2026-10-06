@@ -1164,6 +1164,7 @@ function goalTargetRow(name) {
 
 function renderGoal() {
   if (!D || S.page !== 'goal') return;
+  buildManualForm();
   const today = D.asOf.day, tt = new Date(today * 864e5);
   const y = tt.getUTCFullYear(), m = tt.getUTCMonth() + 1, mKey = y + '-' + pad(m);
   const mStart = today - (tt.getUTCDate() - 1);
@@ -1319,6 +1320,78 @@ function renderGoal() {
         `<td class="x">${fmt(s.proj)}${g ? ` <span class="${s.projRate >= 1 ? 'up' : 'down'}">${(s.projRate * 100).toFixed(0)}%</span>` : ''}</td></tr>`;
     }).join('') + '</tbody>';
 }
+
+
+/* ---------- 수동 DB 입력 (목표 탭) ---------- */
+const KNOWN_EXTRA = ['K', 'MT', 'TB', 'PLAN', 'MJ', '홈페이지', '네이버', '구방송', 'BIG'];
+let miBuilt = false;
+function miRowHtml(date, ch, n) {
+  return `<div class="mi-row"><input type="date" class="mi-date" value="${date}" aria-label="일자">` +
+    `<input type="text" class="mi-ch" list="miChannels" value="${esc(ch || '')}" placeholder="채널 (예: K, PLAN)" aria-label="채널">` +
+    `<input type="number" class="mi-n" min="0" step="1" value="${n == null ? '' : n}" placeholder="DB수" aria-label="DB수">` +
+    `<button class="mi-del" title="이 줄 빼기" aria-label="이 줄 빼기">×</button></div>`;
+}
+function buildManualForm() {
+  if (!D) return;
+  const names = [...new Set(D.names.concat(KNOWN_EXTRA))];
+  $('miChannels').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  if (!miBuilt) {
+    const y = dayToStr(D.asOf.day - 1);
+    $('miRows').innerHTML = miRowHtml(y, '', '') + miRowHtml(y, '', '');
+    try { const p = localStorage.getItem('dash_pin'); if (p) { $('miPin').value = p; $('miRemember').checked = true; } } catch (e) {}
+    miBuilt = true;
+  }
+  const ent = (D.manualDb && D.manualDb.entries) || [];
+  $('miTable').innerHTML = '<thead><tr><th>일자</th><th>채널</th><th>DB수</th><th>상태</th><th></th></tr></thead><tbody>' +
+    (ent.length ? ent.slice().sort((a, b) => b.day - a.day || String(a.ch).localeCompare(b.ch)).map(e =>
+      `<tr><td>${fmtDay(e.day)} (${DOW[dowOf(e.day)]})</td><td>${esc(e.ch)}</td><td>${fmt(e.n)}</td>` +
+      `<td>${e.used ? '<span class="up">반영 중</span>' : '<span class="dim">자동 데이터 우선 (미사용)</span>'}</td>` +
+      `<td><button class="linkbtn mi-edit" data-d="${dayToStr(e.day)}" data-c="${esc(e.ch)}" data-n="${e.n}">수정</button></td></tr>`).join('')
+      : '<tr><td colspan="5" class="note">아직 입력된 내역이 없어요.</td></tr>') + '</tbody>';
+}
+$('miAdd').addEventListener('click', () => {
+  const rows = $('miRows').querySelectorAll('.mi-date');
+  const last = rows.length ? rows[rows.length - 1].value : dayToStr(D.asOf.day - 1);
+  $('miRows').insertAdjacentHTML('beforeend', miRowHtml(last, '', ''));
+});
+$('miRows').addEventListener('click', e => {
+  const b = e.target.closest('.mi-del'); if (!b) return;
+  const row = b.closest('.mi-row');
+  if ($('miRows').children.length > 1) row.remove(); else row.querySelectorAll('input:not(.mi-date)').forEach(i => i.value = '');
+});
+$('miTable').addEventListener('click', e => {
+  const b = e.target.closest('.mi-edit'); if (!b) return;
+  $('miRows').insertAdjacentHTML('afterbegin', miRowHtml(b.dataset.d, b.dataset.c, b.dataset.n));
+  $('miRows').firstElementChild.querySelector('.mi-n').focus();
+  $('miMsg').textContent = '숫자를 고친 뒤 저장하세요. 0으로 저장하면 그 줄이 지워져요.';
+});
+$('miSave').addEventListener('click', async () => {
+  const rows = [...$('miRows').querySelectorAll('.mi-row')].map(r => ({
+    date: r.querySelector('.mi-date').value, ch: r.querySelector('.mi-ch').value.trim(), n: r.querySelector('.mi-n').value
+  })).filter(r => r.date && r.ch && r.n !== '');
+  const msg = $('miMsg');
+  if (!rows.length) { msg.className = 'mi-msg err'; msg.textContent = '일자, 채널, DB수를 모두 입력한 줄이 없어요.'; return; }
+  const pin = $('miPin').value.trim();
+  if (!pin) { msg.className = 'mi-msg err'; msg.textContent = '입력 비밀번호를 넣어 주세요.'; $('miPin').focus(); return; }
+  try { if ($('miRemember').checked) localStorage.setItem('dash_pin', pin); else localStorage.removeItem('dash_pin'); } catch (e) {}
+  $('miSave').disabled = true;
+  msg.className = 'mi-msg'; msg.textContent = `${rows.length}줄 저장 중… 대시보드 데이터도 다시 계산하느라 10~20초 걸려요.`;
+  try {
+    const res = await fetch(CFG.API_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'manualDb', pin, rows, token: CFG.TOKEN || undefined })
+    });
+    let data; try { data = JSON.parse(await res.text()); } catch (_) { throw new Error('응답을 읽을 수 없어요. Apps Script를 새 버전으로 배포했는지 확인해 주세요.'); }
+    if (data.error) throw new Error(data.error);
+    msg.className = 'mi-msg ok'; msg.textContent = `${data.saved}줄 저장했어요. 대시보드에 반영 중이에요.`;
+    const y = dayToStr(D.asOf.day - 1);
+    $('miRows').innerHTML = miRowHtml(y, '', '') + miRowHtml(y, '', '');
+    await load(false, true);
+    msg.textContent = `${data.saved}줄 저장하고 대시보드에 반영했어요.`;
+  } catch (err) {
+    msg.className = 'mi-msg err'; msg.textContent = '저장하지 못했어요: ' + (err.message || err);
+  } finally { $('miSave').disabled = false; }
+});
 
 /* ---------- 자동 갱신 ---------- */
 setInterval(() => { if (S.auto && D && document.visibilityState === 'visible') load(false, true); }, AUTO_REFRESH_MIN * 60000);
