@@ -386,3 +386,5 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .focus-sum { margin: 0 0 6px; font-size: 13.5px; color: var(--ink); }
 .focus-sum .hl { color: var(--accent); }
 @media (max-width: 720px) { #spendTable th, #spendTable td { padding-left: 6px; padding-right: 6px; } }
+.empty-note { margin: 8px 0 4px; padding: 28px 16px; text-align: center; color: var(--muted); background: var(--soft); border-radius: 10px; }
+.focus-seg button.army { font-weight: 700; }

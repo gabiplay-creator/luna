@@ -663,13 +663,19 @@ function renderTrend(dayBySrc) {
   const tUnits = S.stack === 'group'
     ? D.groups.map(g => ({ name: g.name, color: g.color, chs: g.idx.filter(c => S.src.has(c)) })).filter(u => u.chs.length)
     : D.groups.flatMap(g => g.idx).filter(c => S.src.has(c)).map(c => ({ name: D.names[c], color: chColor(c), chs: [c] }));
-  if (S.focus && !tUnits.some(u => u.name === S.focus)) S.focus = null;
-  const focusU = S.focus ? tUnits.find(u => u.name === S.focus) : null;
+  // 군 단위(주력군·지원군) 보기: 그 군에 속한 채널(또는 팀)을 쌓아서 보여줌
+  const armies = [...new Set(D.groups.map(g => g.army))].map(a => {
+    const subs = tUnits.filter(u => u.chs.every(c => D.groups[D.groupOf[c]].army === a));
+    return { name: a, army: true, color: (D.groups.find(g => g.army === a) || {}).color, chs: subs.flatMap(u => u.chs), subs };
+  }).filter(a => a.subs.length > 1);
+  const opts = armies.concat(tUnits);
+  if (S.focus && !opts.some(u => u.name === S.focus)) S.focus = null;
+  const focusU = S.focus ? opts.find(u => u.name === S.focus) : null;
   // 채널(또는 그룹) 선택 버튼
   $('focusSeg').innerHTML = '<span class="note">자세히 보기</span>' +
     `<button data-f="" aria-pressed="${!focusU}">전체</button>` +
-    tUnits.map(u => `<button data-f="${esc(u.name)}" aria-pressed="${focusU === u}" style="--c:${u.color}"><i></i>${esc(u.name)}</button>`).join('');
-  const datasets = (focusU ? [focusU] : tUnits).map(u => Object.assign({ label: u.name, data: bucket(u.chs), backgroundColor: u.color }, bar));
+    opts.map(u => `<button data-f="${esc(u.name)}" aria-pressed="${focusU === u}" class="${u.army ? 'army' : ''}" style="--c:${u.color}"><i></i>${esc(u.name)}</button>`).join('');
+  const datasets = (focusU ? (focusU.army ? focusU.subs : [focusU]) : tUnits).map(u => Object.assign({ label: u.name, data: bucket(u.chs), backgroundColor: u.color }, bar));
 
   const names = { day: '일별', week: '주간', month: '월별' };
   $('trendTitle').textContent = names[S.trend] + ' 유입 추이';
@@ -1251,6 +1257,16 @@ function renderSpendTrend(dayBySrc) {
   const cpa = totS.map((v, i) => totD[i] && v ? v / totD[i] : null);
   ds.push({ type: 'line', label: 'CPA', data: cpa, borderColor: '#18212E', backgroundColor: '#18212E', borderWidth: 2, pointRadius: S.trend === 'day' ? 0 : 3, tension: 0.25, yAxisID: 'y1', order: 1, spanGaps: true });
   const sumS = totS.reduce((a, b) => a + b, 0), sumD = totD.reduce((a, b) => a + b, 0);
+  const emptyEl = $('spendTrendEmpty'), boxEl = $('spendTrendChart').parentNode;
+  if (!sumS) {
+    if (charts.spendTrendChart) { charts.spendTrendChart.destroy(); delete charts.spendTrendChart; }
+    boxEl.hidden = true; emptyEl.hidden = false;
+    let first = Infinity; D.spendCh.forEach(m => m.forEach((v, d) => { if (v && d < first) first = d; }));
+    emptyEl.textContent = '선택한 기간에는 광고비 기록이 없어요.' + (isFinite(first) ? ' 광고비는 ' + fmtDay(first) + '부터 있어요.' : '');
+    $('spendTrendNote').textContent = '';
+    return;
+  }
+  boxEl.hidden = false; emptyEl.hidden = true;
   $('spendTrendNote').textContent = `선택 기간 광고비 ${wonShort(sumS)}원, 광고비 입력된 날의 DB ${fmt(sumD)}건, 평균 CPA ${cpaText(sumS, sumD)}`;
   draw('spendTrendChart', {
     type: 'bar',
