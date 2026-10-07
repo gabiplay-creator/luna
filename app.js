@@ -611,7 +611,7 @@ function render() {
   renderTrend(dayBySrc);
   renderSpendTrend(dayBySrc);
   renderDaily(dayBySrc);
-  renderDow(dowC, total);
+  renderDow(dayBySrc);
   renderHour(hourC, noTime);
   renderShare(dimC);
   renderHourCompare();
@@ -768,16 +768,99 @@ function barColors(arr) {
   return arr.map((v, i) => has && i === k ? '#2F5BD3' : '#A9BDEE');
 }
 
-function renderDow(dowC, total) {
-  $('dowNote').textContent = '월~일, 선택 기간 합계';
+function renderDow(dayBySrc) {
+  // 오늘(진행 중)은 빼고, 요일별 "하루 평균"으로 비교해야 기간에 같은 요일이 몇 번 들었는지와 상관없이 공정해요
+  const today = D.asOf.day, A = D.A;
+  const sel = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
+  const dayTotal = new Map(); // 날짜 → 선택 채널 DB 합
+  for (let i = 0; i < D.n; i++) {
+    if (!S.src.has(A.src[i])) continue;
+    if (S.dedupe && A.dup[i]) continue;
+    const d = A.day[i]; if (d > today) continue;
+    dayTotal.set(d, (dayTotal.get(d) || 0) + 1);
+  }
+  const avgOf = (d0, d1) => {
+    const sum = new Array(7).fill(0), cnt = new Array(7).fill(0);
+    for (let d = Math.max(d0, D.min); d <= Math.min(d1, today - 1); d++) { const w = dowOf(d); sum[w] += dayTotal.get(d) || 0; cnt[w]++; }
+    return sum.map((v, i) => cnt[i] ? v / cnt[i] : null);
+  };
+  let cur = avgOf(S.from, S.to), basis = '선택 기간';
+  if (cur.some(v => v == null)) { // 기간이 짧아 빠진 요일이 있으면 기간 끝 기준 최근 4주로 계산
+    const end = Math.min(S.to, today - 1);
+    cur = avgOf(end - 27, end); basis = '선택 기간이 짧아 ' + fmtDay(end - 27).slice(5) + '~' + fmtDay(end).slice(5) + ' 4주';
+  }
+  const curValid = cur.map(v => v || 0);
+  const tot = curValid.reduce((a, b) => a + b, 0);
+  const share = curValid.map(v => tot ? v / tot * 100 : 0);
+  // 전주·이번주: 오늘이 속한 주(월~일) 기준
+  const thisMon = today - dowOf(today);
+  const lastWeek = [...Array(7).keys()].map(w => dayTotal.get(thisMon - 7 + w) ?? null);
+  const thisWeek = [...Array(7).keys()].map(w => thisMon + w < today ? (dayTotal.get(thisMon + w) || 0) : null);
+  const todayNow = dayTotal.get(today) || 0;
+  const avg4 = avgOf(thisMon - 28, thisMon - 1);
+  const k = argmax(curValid);
+  $('dowNote').textContent = '막대: ' + basis + ' 요일별 하루 평균 (오늘 제외)';
+
+  const shareLabels = {
+    id: 'shareLabels',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0), ctx = chart.ctx;
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      meta.data.forEach((bar, i) => {
+        if (!cur[i]) return;
+        ctx.font = '700 11.5px "Pretendard Variable", Pretendard, sans-serif'; ctx.fillStyle = '#18212E';
+        ctx.fillText(fmt(cur[i]), bar.x, bar.y - 16);
+        ctx.font = '500 10.5px "Pretendard Variable", Pretendard, sans-serif'; ctx.fillStyle = '#2F5BD3';
+        ctx.fillText(share[i].toFixed(1) + '%', bar.x, bar.y - 3);
+      });
+      ctx.restore();
+    }
+  };
   draw('dowChart', {
     type: 'bar',
-    data: { labels: DOW, datasets: [{ data: dowC, backgroundColor: barColors(dowC), borderRadius: 3, maxBarThickness: 44 }] },
+    data: {
+      labels: DOW.map((d, i) => i === dowOf(today) ? d + '(오늘)' : d),
+      datasets: [
+        { type: 'bar', label: '요일 평균', data: cur, backgroundColor: cur.map((v, i) => i === k ? '#2F5BD3' : '#A9BDEE'), borderRadius: 3, maxBarThickness: 44, order: 3 },
+        { type: 'line', label: '최근 4주 평균', data: avg4, borderColor: '#A3AEBD', borderDash: [4, 3], borderWidth: 1.5, pointRadius: 2, order: 2 },
+        { type: 'line', label: '지난주', data: lastWeek, borderColor: '#E2612E', backgroundColor: '#E2612E', borderWidth: 2, pointRadius: 3, order: 1 },
+        { type: 'line', label: '이번주', data: thisWeek, borderColor: '#0E8F72', backgroundColor: '#0E8F72', borderWidth: 2.5, pointRadius: 4, order: 0 }
+      ]
+    },
+    plugins: [shareLabels],
     options: {
+      layout: { padding: { top: 30 } },
+      interaction: { mode: 'index', intersect: false },
       scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } },
-      plugins: { tooltip: { callbacks: { title: i => i[0].label + '요일', label: c => ' ' + fmt(c.raw) + '건 (' + pct(c.raw, total) + ')' } } }
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 12, boxHeight: 3, padding: 10, font: { size: 11 } } },
+        tooltip: {
+          filter: c => c.raw != null,
+          callbacks: {
+            title: i => DOW[i[0].dataIndex] + '요일',
+            label: c => ' ' + c.dataset.label + ': ' + fmt(c.raw) + '건' + (c.datasetIndex === 0 ? ' (주간 비중 ' + share[c.dataIndex].toFixed(1) + '%)' : ''),
+            footer: i => {
+              const w = i[0].dataIndex, lw = lastWeek[w], tw = thisWeek[w];
+              const out = [];
+              if (tw != null && lw) out.push('지난주 대비 ' + ((tw - lw) / lw * 100 >= 0 ? '+' : '') + ((tw - lw) / lw * 100).toFixed(0) + '%');
+              if (w === dowOf(today)) out.push('오늘 현재 ' + fmt(todayNow) + '건 (진행 중)');
+              return out;
+            }
+          }
+        }
+      }
     }
   });
+  // 요일별 표: 평균, 비중, 지난주, 이번주, 증감
+  $('dowTable').innerHTML = '<thead><tr><th></th>' + DOW.map((d, i) => `<th${i === dowOf(today) ? ' class="now"' : ''}>${d}</th>`).join('') + '</tr></thead><tbody>' +
+    `<tr><th>비중</th>${share.map((v, i) => `<td${i === k ? ' class="top"' : ''}>${v.toFixed(1)}%</td>`).join('')}</tr>` +
+    `<tr><th>평균</th>${cur.map(v => `<td>${v == null ? '-' : fmt(v)}</td>`).join('')}</tr>` +
+    `<tr><th>지난주</th>${lastWeek.map(v => `<td>${v == null ? '-' : fmt(v)}</td>`).join('')}</tr>` +
+    `<tr><th>이번주</th>${thisWeek.map((v, i) => {
+      if (v == null) return `<td class="dim">${i === dowOf(today) ? fmt(todayNow) + '…' : '-'}</td>`;
+      const lw = lastWeek[i]; const p = lw ? (v - lw) / lw * 100 : null;
+      return `<td>${fmt(v)}${p == null ? '' : `<span class="${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '+' : ''}${p.toFixed(0)}%</span>`}</td>`;
+    }).join('')}</tr></tbody>`;
 }
 
 function renderHour(hourC, noTime) {

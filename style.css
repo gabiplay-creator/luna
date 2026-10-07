@@ -388,3 +388,13 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 @media (max-width: 720px) { #spendTable th, #spendTable td { padding-left: 6px; padding-right: 6px; } }
 .empty-note { margin: 8px 0 4px; padding: 28px 16px; text-align: center; color: var(--muted); background: var(--soft); border-radius: 10px; }
 .focus-seg button.army { font-weight: 700; }
+
+/* ---------- v27: 요일별 ---------- */
+.dow-tbl { overflow-x: auto; margin-top: 8px; }
+#dowTable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12px; }
+#dowTable th, #dowTable td { padding: 5px 4px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+#dowTable tbody th { text-align: left; color: var(--muted); font-weight: 500; }
+#dowTable thead th { color: var(--muted); font-weight: 500; position: static; background: none; }
+#dowTable thead th.now { color: #0E8F72; font-weight: 700; }
+#dowTable td.top { color: var(--accent); font-weight: 700; }
+#dowTable td span { display: block; font-size: 10.5px; }
