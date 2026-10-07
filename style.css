@@ -376,3 +376,13 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
   #presets { flex-wrap: wrap; }
   #presets button { flex: 1 1 25%; border-bottom: 1px solid var(--line); }
 }
+
+/* ---------- v25: 채널 자세히 보기 ---------- */
+.focus-seg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.focus-seg .note { margin-right: 4px; }
+.focus-seg button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+.focus-seg button i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.focus-seg button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.focus-sum { margin: 0 0 6px; font-size: 13.5px; color: var(--ink); }
+.focus-sum .hl { color: var(--accent); }
+@media (max-width: 720px) { #spendTable th, #spendTable td { padding-left: 6px; padding-right: 6px; } }

@@ -272,6 +272,7 @@ function shiftRange(dir) {
   syncControls(); render();
 }
 $('prevRange').addEventListener('click', () => shiftRange(-1));
+$('focusSeg').addEventListener('click', e => { const b = e.target.closest('button[data-f]'); if (b) { S.focus = b.dataset.f || null; render(); } });
 $('nextRange').addEventListener('click', () => shiftRange(1));
 $('dailySeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.stack = b.dataset.v; syncControls(); render(); } });
 $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) applyPreset(b.dataset.p); });
@@ -659,14 +660,16 @@ function renderTrend(dayBySrc) {
     return arr;
   };
   const bar = { stack: 'a', borderRadius: 2, maxBarThickness: 48 };
-  let datasets;
-  if (S.stack === 'group') {
-    datasets = D.groups.map(g => ({ g, chs: g.idx.filter(c => S.src.has(c)) })).filter(x => x.chs.length)
-      .map(x => Object.assign({ label: x.g.name, data: bucket(x.chs), backgroundColor: x.g.color }, bar));
-  } else {
-    datasets = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c))
-      .map(c => Object.assign({ label: D.names[c], data: bucket([c]), backgroundColor: chColor(c) }, bar));
-  }
+  const tUnits = S.stack === 'group'
+    ? D.groups.map(g => ({ name: g.name, color: g.color, chs: g.idx.filter(c => S.src.has(c)) })).filter(u => u.chs.length)
+    : D.groups.flatMap(g => g.idx).filter(c => S.src.has(c)).map(c => ({ name: D.names[c], color: chColor(c), chs: [c] }));
+  if (S.focus && !tUnits.some(u => u.name === S.focus)) S.focus = null;
+  const focusU = S.focus ? tUnits.find(u => u.name === S.focus) : null;
+  // 채널(또는 그룹) 선택 버튼
+  $('focusSeg').innerHTML = '<span class="note">자세히 보기</span>' +
+    `<button data-f="" aria-pressed="${!focusU}">전체</button>` +
+    tUnits.map(u => `<button data-f="${esc(u.name)}" aria-pressed="${focusU === u}" style="--c:${u.color}"><i></i>${esc(u.name)}</button>`).join('');
+  const datasets = (focusU ? [focusU] : tUnits).map(u => Object.assign({ label: u.name, data: bucket(u.chs), backgroundColor: u.color }, bar));
 
   const names = { day: '일별', week: '주간', month: '월별' };
   $('trendTitle').textContent = names[S.trend] + ' 유입 추이';
@@ -674,7 +677,7 @@ function renderTrend(dayBySrc) {
     : S.trend === 'month' ? '기간 양 끝의 월은 선택한 일자만 포함됩니다.' : '';
 
   // 막대 위 라벨용: 구간별 DB 합계, 광고비, CPA(광고비가 있는 날·채널의 DB 기준)
-  const selCh = D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
+  const selCh = focusU ? focusU.chs : D.groups.flatMap(g => g.idx).filter(c => S.src.has(c));
   const nb = labels.length;
   const bDb = new Array(nb).fill(0), bSp = new Array(nb).fill(0), bMdb = new Array(nb).fill(0);
   selCh.forEach(c => {
@@ -745,6 +748,11 @@ function renderTrend(dayBySrc) {
       }
     }
   });
+  const sumDb = bDb.reduce((a, b) => a + b, 0), sumSp = bSp.reduce((a, b) => a + b, 0), sumM = bMdb.reduce((a, b) => a + b, 0);
+  $('focusSum').innerHTML = `<b>${focusU ? esc(focusU.name) : '선택 채널 전체'}</b> · DB <b>${fmt(sumDb)}</b>건` +
+    (sumSp ? ` · 광고비 <b>${wonShort(sumSp)}원</b> · CPA <b class="hl">${sumM ? fmt(sumSp / sumM) + '원' : '-'}</b>` +
+      (sumM < sumDb ? ` <span class="dim">(광고비 입력된 날 DB ${fmt(sumM)}건 기준)</span>` : '')
+      : ' · <span class="dim">이 기간은 광고비 데이터가 없어 CPA를 계산할 수 없어요</span>');
   $('trendNote').textContent = ($('trendNote').textContent ? $('trendNote').textContent + ' ' : '') +
     (hasCpa ? '막대 위 숫자는 DB 수, 광고비, CPA예요. 막대가 좁으면 DB 수와 CPA(만원 단위)만, 더 좁으면 DB 수만 보여요.' : '막대 위 숫자는 DB 수예요.');
 }
