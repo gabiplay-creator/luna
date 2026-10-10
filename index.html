@@ -23,6 +23,7 @@
       <button role="tab" data-page="live" aria-selected="true">실시간 현황</button>
       <button role="tab" data-page="rank" aria-selected="false">순위</button>
       <button role="tab" data-page="goal" aria-selected="false">목표</button>
+      <button role="tab" data-page="issue" aria-selected="false">이슈정리</button>
     </nav>
     <div class="head-right">
       <label class="toggle"><input type="checkbox" id="autoRefresh" checked> 5분마다 자동 갱신</label>
@@ -239,6 +240,141 @@
       </section>
     </div>
     <p class="note rank-foot">목표는 시트의 <b>목표</b> 탭(월 | 구분 | 목표DB)에서 읽어요. "어제까지"는 오늘을 뺀 확정 수량이고, 하루 필요량은 남은 수량을 오늘 포함 남은 날 수로 나눈 값이에요. 자동 시트가 없는 채널은 <b>수동DB</b> 탭(일자 | 채널 | DB수) 입력분으로 계산하고, 같은 날짜·채널에 자동 데이터가 생기면 자동 데이터를 우선해요. 위쪽 중복 제외 옵션이 적용돼요.</p>
+  </div>
+  <div id="page-issue" hidden>
+    <section class="card iss-top">
+      <div class="chead"><h2>이슈 정리</h2><span class="note">2026-10-10 09:00 기준 · 시트 실제 유입 기준(B·U 제외)</span></div>
+      <p class="iss-lead">휴일 오후는 평소보다 <b class="down">6~11%</b> 적게 들어오고, <b>금요일 휴일</b>은 <b class="down">39~48%</b>까지 빠져요. 연휴 전날은 평균으로는 오후가 오히려 늘지만, <b>최근 3번 연속</b> 하루 <b class="down">13~21%</b> 감소했어요.</p>
+      <div class="iss-rules">
+        <div class="rule"><span class="rl">연휴 전날 오후(14~18시)</span><span class="rv"><b class="up">+17%</b> / <b class="down">−16%</b></span><span class="rn">G 9회 평균 / 5채널 최근 3회</span></div>
+        <div class="rule"><span class="rl">연휴 전날 저녁(19~23시)</span><span class="rv"><b class="up">+12%</b> / <b class="down">−18%</b></span><span class="rn">G 9회 평균 / 5채널 최근 3회</span></div>
+        <div class="rule"><span class="rl">휴일 당일 오후(14~18시)</span><span class="rv"><b class="down">−11%</b></span><span class="rn">G, 휴일 13회 평균 (5채널 −6%)</span></div>
+        <div class="rule"><span class="rl">금요일 휴일 오후(14~18시)</span><span class="rv"><b class="down">−48%</b></span><span class="rn">10/9 G (5채널 −39%)</span></div>
+        <div class="rule"><span class="rl">연휴 토요일 아침(0~8시)</span><span class="rv"><b class="down">−41%</b></span><span class="rn">10/10 5채널, 하루 마감 −15~−25% 예상</span></div>
+      </div>
+    </section>
+
+    <section class="card iss-card">
+      <div class="chead"><h2>상황별 평소 대비 증감</h2><span class="note">평소 = 앞뒤 4주 같은 요일(휴일·전후일 제외) 평균</span></div>
+      <h3 class="iss-h3">G</h3>
+      <div class="tbl iss-tbl"><table>
+        <thead><tr><th>상황</th><th>표본</th><th>0~13시</th><th>14~18시</th><th>19~23시</th><th>하루</th></tr></thead>
+        <tbody>
+          <tr><td>연휴 전날 (2~10월 평균)</td><td>9회</td><td class="down">−6%</td><td class="up">+17%</td><td class="up">+12%</td><td class="up">+5%</td></tr>
+          <tr><td>연휴 전날 최근 3회 (9/23·10/2·10/8)</td><td>3회</td><td class="down">−20%</td><td class="up">+3%</td><td class="down">−14%</td><td class="down">−13%</td></tr>
+          <tr><td>휴일 당일</td><td>13회</td><td class="up">+1%</td><td class="down">−11%</td><td class="down">−10%</td><td class="down">−6%</td></tr>
+          <tr><td>연휴 첫날 (5/5·6/3·9/24·10/3)</td><td>4회</td><td class="up">+9%</td><td class="down">−11%</td><td class="down">−14%</td><td class="down">−4%</td></tr>
+          <tr class="hl"><td>10/9 한글날 (금, 연휴 첫날)</td><td>1회</td><td class="up">+36%</td><td class="down">−48%</td><td class="up">+12%</td><td class="up">+7%</td></tr>
+        </tbody></table></div>
+      <h3 class="iss-h3">5채널 합계 (G·H·D·M·T)</h3>
+      <div class="tbl iss-tbl"><table>
+        <thead><tr><th>상황</th><th>표본</th><th>0~13시</th><th>14~18시</th><th>19~23시</th><th>하루</th></tr></thead>
+        <tbody>
+          <tr><td>연휴 전날 (2~10월 평균)</td><td>9회</td><td class="down">−12%</td><td class="up">+5%</td><td class="up">+9%</td><td class="down">−2%</td></tr>
+          <tr><td>연휴 전날 최근 3회 (9/23·10/2·10/8)</td><td>3회</td><td class="down">−26%</td><td class="down">−16%</td><td class="down">−18%</td><td class="down">−21%</td></tr>
+          <tr><td>휴일 당일</td><td>13회</td><td class="up">+4%</td><td class="down">−6%</td><td class="down">−7%</td><td class="down">−2%</td></tr>
+          <tr><td>연휴 첫날 (5/5·6/3·9/24·10/3)</td><td>4회</td><td class="up">+8%</td><td class="up">+6%</td><td class="down">−5%</td><td class="up">+3%</td></tr>
+          <tr class="hl"><td>10/9 한글날 (금, 연휴 첫날)</td><td>1회</td><td class="up">+3%</td><td class="down">−39%</td><td class="down">−17%</td><td class="down">−15%</td></tr>
+        </tbody></table></div>
+      <p class="note">휴일 표본: 설 연휴(2/16~18), 3·1절 대체, 어린이날, 석가탄신 대체, 지방선거, 광복절 대체, 추석(9/24~26), 개천절(10/3·10/5). 12/25·1/1은 G 데이터 초기라 제외했어요.</p>
+    </section>
+
+    <div class="grid iss-grid">
+      <section class="card iss-card">
+        <div class="chead"><h2><span class="tag">10/9 금</span> G 오후 공백 — 구글 애즈 비용 ÷ 시트 유입</h2><span class="note">비용 VAT 포함</span></div>
+        <div class="tbl iss-tbl"><table>
+          <thead><tr><th>구분</th><th>비용</th><th>클릭</th><th>유입</th><th>CPA</th><th>유입률</th></tr></thead>
+          <tbody>
+            <tr><td>0~13시</td><td>330.4만</td><td>4,075</td><td>77</td><td class="up">4.29만</td><td>1.89%</td></tr>
+            <tr class="hl"><td>14~18시</td><td>182.3만</td><td>2,394</td><td>17</td><td class="down">10.72만</td><td>0.71%</td></tr>
+            <tr><td>19~23시</td><td>297.7만</td><td>3,787</td><td>37</td><td>8.05만</td><td>0.98%</td></tr>
+            <tr class="tot"><td>하루</td><td>810.4만</td><td>10,256</td><td>131</td><td>6.19만</td><td>1.28%</td></tr>
+          </tbody></table></div>
+        <ul class="iss-list">
+          <li><b>예산 소진이 아니었어요.</b> 14시 이후 비용 59%, 클릭당 비용(811→777원)·클릭률(1.16→1.12%) 그대로. 예산 900만 원 중 82%만 사용.</li>
+          <li><b>전환율만 떨어졌어요.</b> 클릭 대비 유입률 1.89% → 0.71%(−62%). 클릭은 오는데 신청을 안 함.</li>
+          <li>오전 실적이 평소 대비 <b class="up">+62%</b>로 이례적이라 꺾임이 더 크게 보였고, 14~23시 합계는 평소 대비 <b class="down">−6%</b>였어요.</li>
+          <li>구글 전환(100.6)보다 시트 유입(131)이 30건 많아요. 실제 CPA는 구글 화면보다 좋아요.</li>
+        </ul>
+      </section>
+
+      <section class="card iss-card">
+        <div class="chead"><h2><span class="tag">10/9 금</span> G 캠페인별 (구글 전환 기준)</h2><span class="note">시트엔 캠페인 정보가 없어 구글 전환으로 비교</span></div>
+        <div class="tbl iss-tbl"><table>
+          <thead><tr><th>캠페인</th><th>타깃CPA</th><th>0~13시 CPA</th><th>14~23시 CPA</th><th>전환율 변화</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td>경북</td><td>5.5만</td><td class="up">2.9만</td><td class="down">13.0만</td><td class="down">2.87% → 0.61%</td></tr>
+            <tr class="hl"><td>충청도</td><td>7만</td><td class="up">4.9만</td><td class="down">15.3만</td><td class="down">1.44% → 0.47%</td></tr>
+            <tr><td>MASS MAIN</td><td>8만</td><td>7.6만</td><td class="down">14.7만</td><td class="down">1.15% → 0.62%</td></tr>
+            <tr><td>수원용인</td><td>8만</td><td>6.6만</td><td>8.3만</td><td>0.89% → 0.68%</td></tr>
+            <tr><td>전북/강원</td><td>6.5만</td><td>8.3만</td><td class="up">6.9만</td><td>0.89% → 0.85%</td></tr>
+          </tbody></table></div>
+        <ul class="iss-list">
+          <li>오전 전환의 <b>75%</b>를 만든 경북·충청도가 오후에 전환율 <b class="down">−75~−80%</b>. 지역 타깃이라 신청 의향 높은 사람이 오전에 먼저 소진됐을 가능성.</li>
+          <li>구글이 반응 나쁜 오후·저녁에 예산을 더 썼어요(20~23시 = 하루 비용의 31%).</li>
+          <li>비용 VAT 별도 금액, 전환율 = 구글 전환 ÷ 클릭.</li>
+        </ul>
+      </section>
+
+      <section class="card iss-card">
+        <div class="chead"><h2><span class="tag">10/10 토</span> 연휴 토요일 아침 부진</h2><span class="note">0~8시 · 08:59까지</span></div>
+        <div class="tbl iss-tbl"><table>
+          <thead><tr><th>채널</th><th>오늘</th><th>평소 토요일</th><th>증감</th></tr></thead>
+          <tbody>
+            <tr><td>G</td><td>25</td><td>29</td><td class="down">−14%</td></tr>
+            <tr><td>H</td><td>8</td><td>13</td><td class="down">−38%</td></tr>
+            <tr class="hl"><td>D</td><td>4</td><td>14</td><td class="down">−71%</td></tr>
+            <tr><td>M</td><td>6</td><td>12</td><td class="down">−50%</td></tr>
+            <tr><td>T</td><td>0</td><td>4</td><td class="down">−100%</td></tr>
+            <tr class="tot"><td>5채널 합계</td><td>43</td><td>73</td><td class="down">−41%</td></tr>
+          </tbody></table></div>
+        <div class="tbl iss-tbl"><table>
+          <thead><tr><th>연휴 토요일 비교</th><th>0~8시</th><th>하루 마감</th><th>0~8시 비중</th></tr></thead>
+          <tbody>
+            <tr><td>일반 토요일 평균</td><td>73</td><td>358</td><td>20.3%</td></tr>
+            <tr><td>9/26 (금 추석 다음 날)</td><td>47</td><td>303 <span class="down">(−15%)</span></td><td>15.5%</td></tr>
+            <tr><td>10/3 (개천절 연휴)</td><td>69</td><td>408</td><td>16.9%</td></tr>
+            <tr class="hl"><td>10/10 오늘</td><td>43</td><td>255~280 예상</td><td>—</td></tr>
+          </tbody></table></div>
+        <ul class="iss-list">
+          <li>연휴 토요일은 아침 비중이 <b>15~17%</b>로 평소(20%)보다 낮아요. 아침이 늦게 시작되고 낮에 따라잡는 패턴.</li>
+          <li>오늘은 9/26과 거의 같은 흐름. 13시 누적 <b>150건 이상</b>이면 회복 흐름이에요.</li>
+          <li>H·D는 광고비 감소 영향도 커요(D 하루 400만~470만 → 300만~350만, 10/6부터 약 <b class="down">−30%</b>).</li>
+        </ul>
+      </section>
+
+      <section class="card iss-card">
+        <div class="chead"><h2>구글 애즈 예산 구조</h2><span class="note">구글 애즈 고객센터 기준</span></div>
+        <ul class="iss-list">
+          <li><b>일 예산 = 평균값.</b> 하루 최대 <b>2배</b>까지 쓰고, 한 달 상한은 일 예산 × <b>30.4</b>.</li>
+          <li>월 중간에 바꾸면 남은 기간 상한 = 이미 쓴 금액 + 새 일 예산 × 남은 일수.</li>
+          <li>그날의 2배 상한은 <b>그날 설정한 가장 높은 예산</b> 기준 → 오후에 내려도 그날은 효과가 거의 없어요.</li>
+          <li>타깃 CPA 입찰은 예산을 자주·크게(약 20% 이상) 바꾸면 재학습으로 며칠 CPA가 출렁여요(실무 경험치).</li>
+          <li>타깃 CPA에서는 시간대 입찰 조정이 대부분 무시돼요 → 시간대 조정은 <b>광고 일정 끄기</b>나 타깃 CPA로.</li>
+        </ul>
+      </section>
+
+      <section class="card iss-card">
+        <div class="chead"><h2>확인 필요</h2><span class="note">데이터 점검</span></div>
+        <ul class="iss-list">
+          <li><b>K 몰림 유입:</b> 10/10 04:55~05:05, 10분에 6건. 중복·봇 여부 확인.</li>
+          <li><b>G 캠페인 정보 없음:</b> GL(G) 탭에 일자·성함·연락처만 있어 캠페인별 실제 CPA를 못 봐요. 폼에 UTM/캠페인명 저장 추천.</li>
+          <li><b>구글 전환 누락:</b> 10/9 구글 전환 100.6 vs 시트 131(−23%). 구글 화면 CPA가 실제보다 높게 보여요.</li>
+          <li><b>평일 비교:</b> 10/8(목)·10/2(금) 시간대 보고서로 평일에도 14~18시 전환율이 낮은지 확인 → 낮으면 경북·충청도 광고 일정 조정.</li>
+        </ul>
+      </section>
+
+      <section class="card iss-card">
+        <div class="chead"><h2>대응 가이드</h2><span class="note">위 수치 기준</span></div>
+        <ul class="iss-list">
+          <li><b>휴일·연휴 예측:</b> 14~18시 G <b class="down">−11%</b>, 금요일 휴일은 <b class="down">−40~−50%</b>로 잡기.</li>
+          <li><b>연휴 전날:</b> 최근 3회 하루 <b class="down">−13~−21%</b>. 오전 <b class="down">−20~−26%</b>부터 약하게 시작.</li>
+          <li><b>휴일 오전 예산 증액은 비추천:</b> 늘린 예산이 전환율 낮은 오후에 쓰일 가능성이 커요.</li>
+          <li><b>예산 변경은 1~2일 전, 20% 이내로.</b> 당일 오르내림은 효과가 작아요.</li>
+        </ul>
+      </section>
+    </div>
+    <p class="note rank-foot">수치는 각 채널 탭의 제출 시각을 시간대별로 센 값이에요. 비용·클릭·캠페인은 구글 애즈 10/9 시간대별 보고서(G 계정)에서 가져왔어요. 이 탭은 분석 시점에 고정된 정리본이라 자동으로 갱신되지 않아요.</p>
   </div>
 </div>
 

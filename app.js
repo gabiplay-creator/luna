@@ -31,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: ['#rank', '#goal'].includes(location.hash) ? location.hash.slice(1) : 'live', rankKey: 'all' };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: ['#rank', '#goal', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', rankKey: 'all' };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -302,11 +302,11 @@ $('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
 $('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
 $('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
 document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page, true); });
-window.addEventListener('hashchange', () => showPage(['#rank', '#goal'].includes(location.hash) ? location.hash.slice(1) : 'live', false));
+window.addEventListener('hashchange', () => showPage(['#rank', '#goal', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', false));
 
 function showPage(p, push) {
   S.page = p;
-  ['live', 'rank', 'goal'].forEach(k => { $('page-' + k).hidden = p !== k; });
+  ['live', 'rank', 'goal', 'issue'].forEach(k => { const el = document.getElementById('page-' + k); if (el) el.hidden = p !== k; });
   document.querySelectorAll('.tabs [data-page]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === p)));
   if (push) history.replaceState(null, '', p === 'live' ? location.pathname + location.search : '#' + p);
   if (p === 'rank') renderRank();
