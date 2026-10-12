@@ -444,3 +444,14 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .live-tbl tr.lv1 .prog span { background: #2A3444; }
 .live-tbl tr.lv2 .prog span { background: #4A5566; }
 .live-tbl tr.lv3 .prog span { background: #8A94A3; }
+
+/* ---------- v31: G 시간대 CPA ---------- */
+.iss-tbl td.h1 { background: #E2F3EC; color: #0B6E58; font-weight: 600; }
+.iss-tbl td.h2 { background: #FDF0DC; color: #8A5A10; }
+.iss-tbl td.h3 { background: #FADAD6; color: #A3342D; font-weight: 600; }
+.iss-tbl td .m { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.iss-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin: 0 0 6px; align-items: center; }
+.iss-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+.iss-legend i.h1 { background: #E2F3EC; } .iss-legend i.h2 { background: #FDF0DC; } .iss-legend i.h3 { background: #FADAD6; }
+.iss-more { margin: 4px 0 10px; color: var(--ink); }
+.iss-more summary { cursor: pointer; color: var(--accent); font-size: 13px; }
