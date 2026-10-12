@@ -429,3 +429,18 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
   .iss-tbl th, .iss-tbl td { padding: 7px 6px; }
 }
 .rule .rv b { display: inline; font-size: inherit; }
+
+/* ---------- v31: 단계별 진하기 (전체 > 주력군 > 팀 > 채널) ---------- */
+.live-tbl tr.lv0 td.fc { color: #0E1F5C; font-weight: 800; font-size: 16px; }
+.live-tbl tr.lv1 td.fc { color: #1F3FA6; font-weight: 750; font-size: 15px; }
+.live-tbl tr.lv2 td.fc { color: #3A62D0; font-weight: 650; }
+.live-tbl tr.lv3 td.fc { color: #6B86D6; font-weight: 500; }
+.live-tbl tr.lv0 td { color: #111824; }
+.live-tbl tr.lv1 td { color: #1C2533; }
+.live-tbl tr.lv2 td { color: #2A3444; }
+.live-tbl tr.lv3 td, .live-tbl tr.lv3 td:first-child { color: #556070; font-weight: 400; }
+.live-tbl tr.lv3 td.dim { color: #7A8494; }
+.live-tbl tr.lv0 .prog span { background: #111824; }
+.live-tbl tr.lv1 .prog span { background: #2A3444; }
+.live-tbl tr.lv2 .prog span { background: #4A5566; }
+.live-tbl tr.lv3 .prog span { background: #8A94A3; }
