@@ -23,6 +23,7 @@
       <button role="tab" data-page="live" aria-selected="true">실시간 현황</button>
       <button role="tab" data-page="rank" aria-selected="false">순위</button>
       <button role="tab" data-page="goal" aria-selected="false">목표</button>
+      <button role="tab" data-page="hour" aria-selected="false">시간별</button>
       <button role="tab" data-page="issue" aria-selected="false">이슈정리</button>
     </nav>
     <div class="head-right">
@@ -241,6 +242,26 @@
     </div>
     <p class="note rank-foot">목표는 시트의 <b>목표</b> 탭(월 | 구분 | 목표DB)에서 읽어요. "어제까지"는 오늘을 뺀 확정 수량이고, 하루 필요량은 남은 수량을 오늘 포함 남은 날 수로 나눈 값이에요. 자동 시트가 없는 채널은 <b>수동DB</b> 탭(일자 | 채널 | DB수) 입력분으로 계산하고, 같은 날짜·채널에 자동 데이터가 생기면 자동 데이터를 우선해요. 위쪽 중복 제외 옵션이 적용돼요.</p>
   </div>
+  <div id="page-hour" hidden>
+    <section class="card iss-card" id="gHourCpa">
+      <div class="chead"><h2>채널 시간대별 CPA</h2><span class="note" id="hcNote"></span></div>
+      <p class="iss-lead" style="font-size:15px" id="hcLead"></p>
+      <div class="hc-ctrl" id="hcCtrl">
+        <div class="frow"><span class="flabel">채널</span><div class="seg"><button data-k="ch" data-v="G">G</button><button data-k="ch" data-v="H">H</button><button data-k="ch" data-v="D">D</button><button data-k="ch" data-v="B">B</button></div></div>
+        <div class="frow"><span class="flabel">보기</span><div class="seg"><button data-k="view" data-v="month">월별</button><button data-k="view" data-v="week">주별</button><button data-k="view" data-v="dow">요일별</button><button data-k="view" data-v="day">일별</button></div></div>
+        <div class="frow"><span class="flabel">시간</span><div class="seg"><button data-k="unit" data-v="block">5구간</button><button data-k="unit" data-v="hour">24시간</button></div></div>
+        <div class="frow"><span class="flabel">지표</span><div class="seg"><button data-k="metric" data-v="cpa">CPA</button><button data-k="metric" data-v="db">유입</button><button data-k="metric" data-v="cost">비용</button></div></div>
+      </div>
+      <div class="iss-legend"><span><i class="h1"></i>기간 평균보다 15% 이상 좋음</span><span><i class="h2"></i>15~40% 나쁨</span><span><i class="h3"></i>40% 이상 나쁨</span></div>
+      <div class="tbl iss-tbl hc-wrap"><table id="hcTable"></table></div>
+      <ul class="iss-list">
+        <li><b>10월 기준 광고 일정 시뮬레이션 (G):</b> 22~23시 끄면 하루 <b>98.6만</b> 절약 · 유입 <b class="down">−11.3건</b> · CPA 6.2만 → <b>6.0만</b>. 0~5시+22~23시 끄면 하루 183만 절약 · 유입 −22.7건(약 −20%) · CPA → <b>5.8만</b>.</li>
+        <li><b>10월 기준 광고 일정 시뮬레이션 (H):</b> 22~23시 끄면 하루 <b>78.7만</b> 절약 · 유입 <b class="down">−9.5건</b> · CPA 6.5만 → <b>6.3만</b>. H는 이미 2~4시 광고가 거의 꺼져 있어요.</li>
+        <li>끄면 CPA는 4~7% 내려가지만 유입도 같이 줄어요. 월 목표와 같이 보고 판단해야 하고, 구글이 남은 예산을 다른 시간대로 옮겨 쓰면 결과가 달라질 수 있어요.</li>
+        <li>구글 애즈 시간대 보고서로 만든 고정 데이터라 자동 갱신되지 않아요. G·H 모두 9/1~10/11 기준(10월 일별 비용은 중복보고와 일치 확인, H 10/2만 83%). 효율 좋은·나쁜 시간은 하루 비용의 2% 이상 쓴 시간만 비교해요. B는 시트에 시간이 없어 하루 단위만 정확해요.</li>
+      </ul>
+    </section>
+  </div>
   <div id="page-issue" hidden>
     <section class="card iss-top">
       <div class="chead"><h2>이슈 정리</h2><span class="note">2026-10-12 갱신 · 시트 실제 유입 기준(B·U 제외)</span></div>
@@ -280,23 +301,6 @@
     </section>
 
 
-    <section class="card iss-card" id="gHourCpa">
-      <div class="chead"><h2>채널 시간대별 CPA</h2><span class="note" id="hcNote"></span></div>
-      <p class="iss-lead" style="font-size:15px" id="hcLead"></p>
-      <div class="hc-ctrl" id="hcCtrl">
-        <div class="frow"><span class="flabel">채널</span><div class="seg"><button data-k="ch" data-v="G">G</button><button data-k="ch" data-v="H">H</button><button data-k="ch" data-v="D">D</button><button data-k="ch" data-v="B">B</button></div></div>
-        <div class="frow"><span class="flabel">보기</span><div class="seg"><button data-k="view" data-v="month">월별</button><button data-k="view" data-v="week">주별</button><button data-k="view" data-v="dow">요일별</button><button data-k="view" data-v="day">일별</button></div></div>
-        <div class="frow"><span class="flabel">시간</span><div class="seg"><button data-k="unit" data-v="block">5구간</button><button data-k="unit" data-v="hour">24시간</button></div></div>
-        <div class="frow"><span class="flabel">지표</span><div class="seg"><button data-k="metric" data-v="cpa">CPA</button><button data-k="metric" data-v="db">유입</button><button data-k="metric" data-v="cost">비용</button></div></div>
-      </div>
-      <div class="iss-legend"><span><i class="h1"></i>기간 평균보다 15% 이상 좋음</span><span><i class="h2"></i>15~40% 나쁨</span><span><i class="h3"></i>40% 이상 나쁨</span></div>
-      <div class="tbl iss-tbl hc-wrap"><table id="hcTable"></table></div>
-      <ul class="iss-list">
-        <li><b>G 10월 기준 광고 일정 시뮬레이션:</b> 22~23시 끄면 하루 <b>98.6만</b> 절약 · 유입 <b class="down">−11.3건</b> · CPA 6.2만 → <b>6.0만</b>. 0~5시+22~23시 끄면 하루 183만 절약 · 유입 −22.7건(약 −20%) · CPA → <b>5.8만</b>.</li>
-        <li>끄면 CPA는 4~7% 내려가지만 유입도 같이 줄어요. 월 목표와 같이 보고 판단해야 하고, 구글이 남은 예산을 다른 시간대로 옮겨 쓰면 결과가 달라질 수 있어요.</li>
-        <li>구글 애즈 시간대 보고서로 만든 고정 데이터라 자동 갱신되지 않아요. G 7~8월은 보고서에 다른 캠페인 비용이 빠진 것으로 보여 제외했어요. B는 시트에 시간이 없어 하루 단위만 정확해요.</li>
-      </ul>
-    </section>
     <div class="grid iss-grid">
       <section class="card iss-card">
         <div class="chead"><h2><span class="tag">10/9 금</span> G 오후 공백 — 구글 애즈 비용 ÷ 시트 유입</h2><span class="note">비용 VAT 포함</span></div>

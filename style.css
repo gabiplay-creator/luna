@@ -468,3 +468,5 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 #hcTable.h24 td .m { font-size: 10px; }
 #hcTable td.dim { color: var(--muted); }
 @media (max-width: 720px) { .hc-ctrl { gap: 8px; } .hc-ctrl .frow { width: 100%; } .hc-wrap { max-height: 480px; } }
+#page-hour .iss-card { margin-bottom: 16px; }
+@media (max-width: 720px) { .tabs button { font-size: 13px; } }
