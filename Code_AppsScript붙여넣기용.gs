@@ -195,8 +195,27 @@ function getDashboardData() {
     campaigns: campaigns.list,
     report: report,
     rows: out.join(';'),
-    spend: readSpend_(ss)
+    spend: readSpend_(ss),
+    camp: readCampaigns_(ss)
   });
+}
+
+// 구글 애즈 캠페인 감시 탭(구글애즈_캠페인감시 스크립트가 매시간 기록) → 대시보드 '점검 필요'용
+const CAMPAIGN_TAB = '캠페인_일별';
+function readCampaigns_(ss) {
+  const sh = ss.getSheetByName(CAMPAIGN_TAB);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const head = sh.getRange(1, 1, 1, Math.max(10, sh.getLastColumn())).getDisplayValues()[0];
+  const upd = (String(head[9] || '').match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/) || [''])[0];
+  const names = new Dict(), rows = [];
+  sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues().forEach(function (r) {
+    const t = parseTs(r[0]); if (!t || !r[1] || !r[2]) return;
+    // 일 | 채널 | 캠페인번호 | 지역 | 상태(1=사용) | 비용(VAT 포함) | 클릭 | 전환
+    rows.push([t.day, String(r[1]).trim(), names.id(r[2]), String(r[3] || '기타').trim(),
+      String(r[4]).toUpperCase() === 'ENABLED' ? 1 : 0, Math.round(Number(r[5] || 0) * 1.1), Number(r[6] || 0),
+      Math.round(Number(r[8] || 0) * 100) / 100].join(','));
+  });
+  return { updated: upd, names: names.list, rows: rows.join(';') };
 }
 
 // 수동 DB 입력 탭: A열 일자 | B열 채널(K, MT, PLAN, 홈페이지 …) | C열 DB수
@@ -251,6 +270,8 @@ function readGoals_(ss) {
 const SPEND_TAB_PRIORITY = ['광고비_구글', '광고비_메타', '광고비_틱톡', '광고비_수동'];
 // 매체 API 금액은 부가세 미포함이라, 수기 입력(VAT 포함)과 맞추기 위해 곱합니다. 미포함으로 보고 싶으면 1로 바꾸세요.
 const SPEND_VAT = { '광고비_구글': 1.1, '광고비_메타': 1.1, '광고비_틱톡': 1.1 };
+// 탭 전체가 아니라 특정 채널만 VAT를 더해야 할 때 (중복보고의 M은 메타 지출 원금 = VAT 별도)
+const SPEND_VAT_CH = { '광고비_수동': { 'M': 1.1 } };
 
 /**
  * '광고비'로 시작하는 탭을 읽어 일자·채널별 금액을 'day,채널,금액;…' 형태로 반환합니다.
@@ -272,7 +293,8 @@ function readSpend_(ss) {
       const amt = Number(String(r[3] == null ? '' : r[3]).replace(/[^0-9.\-]/g, ''));
       if (!t || !ch || !isFinite(amt)) return;
       const k = t.day + ',' + ch;
-      local.set(k, (local.get(k) || 0) + amt * vat);
+      const v2 = (SPEND_VAT_CH[name] && SPEND_VAT_CH[name][ch]) || vat;
+      local.set(k, (local.get(k) || 0) + amt * v2);
     });
     local.forEach(function (v, k) { if (!final.has(k)) final.set(k, v); });
   });

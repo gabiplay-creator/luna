@@ -121,9 +121,66 @@
         }
       }
     });
-    return out.sort((a, b) => b.lv - a.lv || a.ch - b.ch);
+    detectCamp(out, today, dl);
+    return out.sort((a, b) => b.lv - a.lv || (a.ch || 0) - (b.ch || 0));
   }
 
+
+  // ---------- 캠페인·지역 감시 (구글 애즈 '캠페인_일별' 탭) ----------
+  const CR = {
+    zeroClicks: 30,    // 하루 클릭 30회 이상인데 전환 0 →
+    zeroBase: 2,       //   평소 하루 전환 2건 이상이던 캠페인이면 긴급 (랜딩·폼·전환태그 오류 의심)
+    todayExpect: 4,    // 오늘: 클릭 × 평소 전환율 = 기대 전환 4건 이상인데 0건 → 긴급
+    cvrRatio: 0.4,     // 어제 전환율이 평소의 40% 미만 (클릭 50회 이상) → 주의
+    stopCost: 100000,  // 최근 7일 하루 평균 10만원 이상 쓰던 캠페인이 어제 거의 0원 → 주의 (중단·비승인·예산)
+  };
+  function detectCamp(out, today, dl) {
+    const C = D.camp; if (!C || !C.rows) return;
+    const by = new Map();
+    C.rows.split(';').forEach(r => {
+      const p = r.split(','); if (p.length < 8) return;
+      const k = p[1] + '|' + p[2];
+      let o = by.get(k); if (!o) { o = { ch: p[1], name: C.names[+p[2]] || '', region: p[3], on: 0, d: new Map() }; by.set(k, o); }
+      const d = +p[0]; o.d.set(d, { cost: +p[5], clk: +p[6], cv: +p[7] });
+      if (d >= today - 1) o.on = Math.max(o.on, +p[4]);
+    });
+    const g = (o, d) => o.d.get(d) || { cost: 0, clk: 0, cv: 0 };
+    by.forEach(o => {
+      if (!o.on) return; // 일시중지·삭제 캠페인 제외
+      const lbl = `${o.ch} · ${o.region}`, nm = o.name;
+      let bc = 0, bk = 0, bcv = 0, n = 0;
+      for (let d = today - 15; d < today - 1; d++) { const x = g(o, d); if (x.cost > 0) { bc += x.cost; bk += x.clk; bcv += x.cv; n++; } }
+      if (n < 5) return; // 데이터가 쌓일 때까지 제외
+      const cvPerDay = bcv / n, cvr = bk ? bcv / bk : 0;
+      // 연속 전환 0일 (어제부터 거꾸로)
+      let z = 0, zc = 0;
+      for (let d = today - 1; d >= today - 14; d--) { const x = g(o, d); if (x.clk >= CR.zeroClicks && x.cv === 0) { z++; zc += x.clk; } else break; }
+      const t = g(o, today);
+      if (z && cvPerDay >= CR.zeroBase) {
+        out.push({ lv: 2, id: 'camp:' + nm + ':z:' + (today - z), title: `${lbl} ${z === 1 ? '어제' : z + '일 연속'} 클릭 ${fmt(zc)}회 · 전환 0`,
+          text: `${nm} — 평소 하루 전환 ${cvPerDay.toFixed(1)}건. 클릭은 들어오는데 신청이 없어요. 랜딩 신청 폼·전환 태그·연결 시트를 점검해 주세요.${t.clk ? ` (오늘 클릭 ${fmt(t.clk)} · 전환 ${fmt(t.cv)})` : ''}` });
+        return;
+      }
+      // 오늘 진행 중: 클릭은 충분한데 전환 0
+      if (t.cv === 0 && t.clk * cvr >= CR.todayExpect) {
+        out.push({ lv: 2, id: 'camp:' + nm + ':t:' + today, title: `${lbl} 오늘 클릭 ${fmt(t.clk)}회 · 전환 0`,
+          text: `${nm} — 평소 전환율이면 지금쯤 ${(t.clk * cvr).toFixed(0)}건은 나와야 해요. 랜딩 신청 폼을 확인해 주세요. (구글 전환은 몇 시간 늦게 잡힐 수 있어요)` });
+        return;
+      }
+      const y = g(o, today - 1);
+      if (y.clk >= 50 && cvr > 0 && y.cv / y.clk < cvr * CR.cvrRatio) {
+        out.push({ lv: 1, id: 'camp:' + nm + ':cvr:' + (today - 1), title: `${lbl} 어제 전환율 ${(y.cv / y.clk * 100).toFixed(2)}% — 평소의 ${Math.round(y.cv / y.clk / cvr * 100)}%`,
+          text: `${nm} — 클릭 ${fmt(y.clk)} · 전환 ${fmt(y.cv)} (평소 전환율 ${(cvr * 100).toFixed(2)}%). 랜딩·소재 변경 여부를 확인해 주세요.` });
+      }
+      let c7 = 0; for (let d = today - 8; d < today - 1; d++) c7 += g(o, d).cost; c7 /= 7;
+      if (c7 >= CR.stopCost && y.cost < c7 * 0.1) {
+        out.push({ lv: 1, id: 'camp:' + nm + ':stop:' + (today - 1), title: `${lbl} 어제 광고비 ${wonShort(y.cost)}원 — 거의 멈춤`,
+          text: `${nm} — 최근 7일 하루 평균 ${wonShort(c7)}원. 비승인·예산·결제·일정 문제를 확인해 주세요.` });
+      }
+    });
+  }
+
+  function campNote() { const C = D.camp; if (!C || !C.rows) return '캠페인·지역 감시: 구글 애즈 스크립트 연결 전'; return '캠페인 ' + (C.names ? C.names.length : 0) + '개 감시 (구글 애즈 ' + (C.updated ? C.updated.slice(5) : '') + ' 갱신)'; }
   window.renderAlerts = function () {
     const box = document.getElementById('alertBox'); if (!box || !D) return;
     let list;
@@ -135,10 +192,10 @@
     const tab = document.querySelector('.tabs [data-page="live"]');
     if (tab) { let b = tab.querySelector('.a-badge'); if (!b) { b = document.createElement('span'); b.className = 'a-badge'; tab.appendChild(b); } b.textContent = vis.length || ''; b.dataset.crit = crit ? '1' : ''; }
     if (!vis.length) {
-      box.innerHTML = `<div class="a-ok">● 유입 이상 없음 <span class="note">${D.asOf.label} 기준 · 채널 ${D.names.length}개 점검${hidden ? ` · 확인 처리 ${hidden}건 숨김 <button class="linkbtn" data-a-reset>다시 보기</button>` : ''}</span></div>`;
+      box.innerHTML = `<div class="a-ok">● 유입 이상 없음 <span class="note">${D.asOf.label} 기준 · 채널 ${D.names.length}개 · ${campNote()}${hidden ? ` · 확인 처리 ${hidden}건 숨김 <button class="linkbtn" data-a-reset>다시 보기</button>` : ''}</span></div>`;
       return;
     }
-    box.innerHTML = `<div class="chead"><h2>점검 필요 <span class="a-count${crit ? ' crit' : ''}">${vis.length}</span></h2><span class="note">${D.asOf.label} 기준 자동 감지 · 평소 = 최근 ${RULE.baseDays}일 평균${hidden ? ` · 확인 ${hidden}건 숨김 <button class="linkbtn" data-a-reset>다시 보기</button>` : ''}</span></div>` +
+    box.innerHTML = `<div class="chead"><h2>점검 필요 <span class="a-count${crit ? ' crit' : ''}">${vis.length}</span></h2><span class="note">${D.asOf.label} 기준 자동 감지 · 평소 = 최근 ${RULE.baseDays}일 평균 · ${campNote()}${hidden ? ` · 확인 ${hidden}건 숨김 <button class="linkbtn" data-a-reset>다시 보기</button>` : ''}</span></div>` +
       '<ul class="a-list">' + vis.map(a => `<li class="${LV[a.lv][1]}"><span class="a-lv">${LV[a.lv][0]}</span><div class="a-body"><b>${esc(a.title)}</b><span>${esc(a.text)}</span></div><button class="btn a-ack" data-a-ack="${esc(a.id)}" title="오늘 하루 숨기기">확인</button></li>`).join('') + '</ul>';
   };
 
