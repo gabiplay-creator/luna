@@ -473,3 +473,29 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 #hcTable td.hc-empty { white-space: normal; text-align: left; padding: 14px 10px; color: var(--ink); line-height: 1.6; }
 #hcTable td.hc-empty .linkbtn { font-weight: 600; }
 .iss-card.flash { box-shadow: 0 0 0 3px var(--accent-soft); transition: box-shadow .3s; }
+/* v41: D·B 캠페인 표는 위쪽 표에서 보여주고 아래 카드는 숨김 */
+#dCampHour, #bCampHour { display: none; }
+.hc-ctrl .seg button:disabled { color: #B4BCC8; cursor: not-allowed; }
+.hc-ctrl .seg button.part { font-style: italic; }
+
+/* ---------- v42: 유입 이상 감지 ---------- */
+.card.alerts { margin-bottom: 16px; }
+.card.alerts:empty { display: none; }
+.a-ok { color: #0E8F72; font-weight: 600; }
+.a-ok .note { font-weight: 400; margin-left: 6px; }
+.a-count { display: inline-block; min-width: 22px; padding: 0 7px; border-radius: 11px; background: #F2A33A; color: #fff; font-size: 12px; text-align: center; vertical-align: 2px; }
+.a-count.crit { background: #C2413A; }
+.a-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.a-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); }
+.a-list li.a-crit { background: #FDECEA; border-color: #F3C2BD; }
+.a-list li.a-warn { background: #FFF6E0; border-color: #F0D99A; }
+.a-list li.a-info { background: #EEF3FD; border-color: #C9D7F5; }
+.a-lv { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; }
+.a-crit .a-lv { background: #C2413A; } .a-warn .a-lv { background: #D98A1C; } .a-info .a-lv { background: #2F5BD3; }
+.a-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; word-break: keep-all; }
+.a-body span { color: var(--muted); font-size: 13px; }
+.a-ack { flex: none; font-size: 12px; padding: 4px 10px; }
+.tabs .a-badge:empty { display: none; }
+.tabs .a-badge { display: inline-block; margin-left: 5px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #F2A33A; color: #fff; font-size: 11px; line-height: 18px; vertical-align: 1px; }
+.tabs .a-badge[data-crit="1"] { background: #C2413A; }
+@media (max-width: 720px) { .a-list li { align-items: flex-start; } .a-ack { align-self: center; } }

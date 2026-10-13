@@ -156,6 +156,7 @@ function onData(raw) {
   applyPreset(S.preset);
   renderLive();
   renderSpend();
+  if (window.renderAlerts) window.renderAlerts();
   $('meta').textContent = '데이터 기준 ' + D.generatedAt + (D.buildSec ? ' (계산 ' + D.buildSec + '초)' : '') + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
     (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
@@ -297,7 +298,7 @@ $('chips').addEventListener('click', e => {
   syncControls(); render();
 });
 $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
-function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); renderGoal(); }
+function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); renderGoal(); if (window.renderAlerts) window.renderAlerts(); }
 $('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
 $('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
 $('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
