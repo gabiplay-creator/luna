@@ -470,3 +470,6 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 @media (max-width: 720px) { .hc-ctrl { gap: 8px; } .hc-ctrl .frow { width: 100%; } .hc-wrap { max-height: 480px; } }
 #page-hour .iss-card { margin-bottom: 16px; }
 @media (max-width: 720px) { .tabs button { font-size: 13px; } }
+#hcTable td.hc-empty { white-space: normal; text-align: left; padding: 14px 10px; color: var(--ink); line-height: 1.6; }
+#hcTable td.hc-empty .linkbtn { font-weight: 600; }
+.iss-card.flash { box-shadow: 0 0 0 3px var(--accent-soft); transition: box-shadow .3s; }
