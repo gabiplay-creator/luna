@@ -71,6 +71,15 @@ window.HC_DATA = {"G":{"note":"9/1~10/13","days":{"2026-09-01":[[152750,117667,9
     const T = agg(days, all, 0, 24), base = T.c / T.n;
     const subLbl = st.metric === 'cpa' ? '아래 숫자 = 유입 건수' : st.metric === 'db' ? '아래 = 행 안 비중 · 클릭 대비 유입률' : '아래 = 행 안 비중';
     let h = '<thead><tr><th>' + { month: '월', week: '주 (월~일)', dow: '요일', day: '일자' }[st.view] + '</th><th>하루</th>' + cs.map(c => '<th>' + c[0] + '</th>').join('') + '</tr></thead><tbody>';
+    { // 맨 위 '기간 평균' 행: CPA는 기간 합계 기준, 유입·비용은 하루 평균
+      const N = all.length;
+      const avgCell = (x, isDay) => {
+        if (st.metric === 'cpa') return cell(x, base, T, isDay);
+        if (st.metric === 'db') return '<td>' + (x.n / N).toFixed(1) + '<span class="m">' + (isDay ? '하루 평균' : (T.n ? (x.n / T.n * 100).toFixed(0) + '%' : '-')) + (x.k ? ' · ' + (x.n / x.k * 100).toFixed(2) + '%' : '') + '</span></td>';
+        return '<td>' + man(x.c / N) + '<span class="m">' + (isDay ? '하루 평균' : (T.c ? (x.c / T.c * 100).toFixed(0) + '%' : '-')) + '</span></td>';
+      };
+      h += '<tr class="hc-avg"><td>기간 평균<span class="m">' + N + '일 · ' + md(all[0]) + '~' + md(all[N - 1]) + '</span></td>' + avgCell(T, true) + cs.map(c => avgCell(agg(days, all, c[1], c[2]), false)).join('') + '</tr>';
+    }
     groups(days).forEach(([lbl, ds]) => {
       if (!ds.length) return;
       const tot = agg(days, ds, 0, 24);

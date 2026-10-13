@@ -499,3 +499,7 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .tabs .a-badge { display: inline-block; margin-left: 5px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #F2A33A; color: #fff; font-size: 11px; line-height: 18px; vertical-align: 1px; }
 .tabs .a-badge[data-crit="1"] { background: #C2413A; }
 @media (max-width: 720px) { .a-list li { align-items: flex-start; } .a-ack { align-self: center; } }
+/* v45: 시간대 표 맨 위 기간 평균 */
+#hcTable tr.hc-avg td { font-weight: 700; background: #EEF2F8; border-bottom: 2px solid var(--line); position: sticky; top: 33px; z-index: 1; }
+#hcTable tr.hc-avg td:first-child { z-index: 2; }
+#hcTable tr.hc-avg td .m { font-weight: 400; }
