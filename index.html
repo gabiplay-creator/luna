@@ -6,9 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 <title>글로벌랩스 DB 대시보드</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=38">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="config.js?v=36"></script>
+<script src="config.js?v=38"></script>
 </head>
 <body>
 <div class="overlay" id="overlay"><div id="loadMsg">시트에서 데이터를 불러오는 중입니다…</div><div class="note">데이터가 많으면 10~40초 걸릴 수 있어요.</div></div>
@@ -258,7 +258,18 @@
         <li><b>10월 기준 광고 일정 시뮬레이션 (G):</b> 22~23시 끄면 하루 <b>98.6만</b> 절약 · 유입 <b class="down">−11.3건</b> · CPA 6.2만 → <b>6.0만</b>. 0~5시+22~23시 끄면 하루 183만 절약 · 유입 −22.7건(약 −20%) · CPA → <b>5.8만</b>.</li>
         <li><b>10월 기준 광고 일정 시뮬레이션 (H):</b> 22~23시 끄면 하루 <b>78.7만</b> 절약 · 유입 <b class="down">−9.5건</b> · CPA 6.5만 → <b>6.3만</b>. H는 이미 2~4시 광고가 거의 꺼져 있어요.</li>
         <li>끄면 CPA는 4~7% 내려가지만 유입도 같이 줄어요. 월 목표와 같이 보고 판단해야 하고, 구글이 남은 예산을 다른 시간대로 옮겨 쓰면 결과가 달라질 수 있어요.</li>
-        <li>구글 애즈 시간대 보고서로 만든 고정 데이터라 자동 갱신되지 않아요. G 9/1~10/12 · H 9/1~10/11 기준(10월 일별 비용은 중복보고와 일치 확인, H 10/2만 83%). 효율 좋은·나쁜 시간은 하루 비용의 2% 이상 쓴 시간만 비교해요. B는 시트에 시간이 없어 하루 단위만 정확해요.</li>
+        <li>구글 애즈 시간대 보고서로 만든 고정 데이터라 자동 갱신되지 않아요. G·H 9/1~10/12 기준(10월 일별 비용은 중복보고와 일치 확인, H 10/2만 83%). 효율 좋은·나쁜 시간은 하루 비용의 2% 이상 쓴 시간만 비교해요. B는 시트에 시간이 없어 하루 단위만 정확해요.</li>
+      </ul>
+    </section>
+    <section class="card iss-card" id="dCampHour">
+      <div class="chead"><h2><span class="tag">D</span> 캠페인별 시간대 CPA — 전체 기간</h2><span class="note">구글 애즈 캠페인 보고서(기간: 전체) · 비용 VAT 포함 ÷ <b>구글 전환수</b> · 색은 각 캠페인 자기 평균 대비 · 아래 숫자 = 비용 비중 · 전환</span></div>
+      <p class="iss-lead" style="font-size:15px">D 사용 중 캠페인 합계 CPA <b>8.0만</b>(구글 전환 기준). 합계 기준 <b class="up">6~18시가 가장 효율적</b>이고 <b class="down">0~5시·22~23시는 평균보다 25% 비싸요</b>(대부분 캠페인이 같은 패턴, PM 충청도·경북은 22~23시도 양호). 캠페인 간 차이가 더 커요: <b class="up">PM(실적 최대화) 4개 4.6만~5.6만</b> vs <b class="down">DZ 경기 관심사 14.0만·DZ 충청도 11.1만</b>.</p>
+      <div class="tbl iss-tbl hc-wrap"><table><thead><tr><th>캠페인</th><th>전체</th><th>0~5시</th><th>6~13시</th><th>14~18시</th><th>19~21시</th><th>22~23시</th></tr></thead><tbody><tr><td><b>D 합계 (사용 중 8개)</b></td><td>8.0만<span class="m">6.14억 · 7,691건</span></td><td class="h2">10.0만<span class="m">10% · 586건</span></td><td class="">7.2만<span class="m">36% · 3,038건</span></td><td class="">7.5만<span class="m">27% · 2,196건</span></td><td class="">8.9만<span class="m">19% · 1,300건</span></td><td class="h2">10.1만<span class="m">9% · 571건</span></td></tr><tr><td>260527DZ_충청도_45세MASS</td><td>11.1만<span class="m">1.80억 · 1,627건</span></td><td class="">12.4만<span class="m">13% · 183건</span></td><td class="">10.9만<span class="m">32% · 530건</span></td><td class="">10.3만<span class="m">24% · 422건</span></td><td class="">11.0만<span class="m">20% · 325건</span></td><td class="">12.6만<span class="m">12% · 166건</span></td></tr><tr><td>260728DZ_경기_관심사45세</td><td>14.0만<span class="m">1.24억 · 886건</span></td><td class="h2">18.6만<span class="m">6% · 40건</span></td><td class="">12.8만<span class="m">35% · 337건</span></td><td class="">13.2만<span class="m">27% · 252건</span></td><td class="">15.7만<span class="m">21% · 166건</span></td><td class="">15.4만<span class="m">11% · 91건</span></td></tr><tr><td>260604DZ_전북강원_45세MASS</td><td>7.5만<span class="m">0.83억 · 1,104건</span></td><td class="h2">8.9만<span class="m">12% · 107건</span></td><td class="">6.8만<span class="m">31% · 374건</span></td><td class="">7.9만<span class="m">27% · 282건</span></td><td class="">7.4만<span class="m">20% · 221건</span></td><td class="">7.8만<span class="m">11% · 120건</span></td></tr><tr><td>260611DZ_경북_45세MASS</td><td>6.9만<span class="m">0.70억 · 1,010건</span></td><td class="h2">8.0만<span class="m">11% · 97건</span></td><td class="">6.4만<span class="m">31% · 332건</span></td><td class="">6.4만<span class="m">26% · 286건</span></td><td class="">7.5만<span class="m">21% · 192건</span></td><td class="">7.5만<span class="m">11% · 102건</span></td></tr><tr><td>260722PM_경기 #3</td><td>5.6만<span class="m">0.49억 · 872건</span></td><td class="h3">8.2만<span class="m">6% · 38건</span></td><td class="">5.0만<span class="m">46% · 449건</span></td><td class="">5.5만<span class="m">30% · 263건</span></td><td class="h2">6.9만<span class="m">14% · 99건</span></td><td class="h3">8.4만<span class="m">4% · 24건</span></td></tr><tr><td>260722PM_전북강원 #2</td><td>4.6만<span class="m">0.49억 · 1,068건</span></td><td class="h2">6.4만<span class="m">9% · 66건</span></td><td class="">4.4만<span class="m">42% · 470건</span></td><td class="">4.1만<span class="m">30% · 355건</span></td><td class="">5.2만<span class="m">15% · 145건</span></td><td class="h3">6.5만<span class="m">4% · 32건</span></td></tr><tr><td>260722PM_충청도 #3</td><td>5.4만<span class="m">0.36억 · 677건</span></td><td class="h2">6.7만<span class="m">6% · 34건</span></td><td class="">5.1만<span class="m">47% · 332건</span></td><td class="">5.4만<span class="m">31% · 208건</span></td><td class="">5.7만<span class="m">13% · 83건</span></td><td class="">5.0만<span class="m">3% · 20건</span></td></tr><tr><td>260722PM_경북 #2</td><td>5.2만<span class="m">0.23억 · 448건</span></td><td class="h3">7.3만<span class="m">6% · 20건</span></td><td class="">4.8만<span class="m">45% · 214건</span></td><td class="">5.4만<span class="m">30% · 128건</span></td><td class="">5.2만<span class="m">15% · 69건</span></td><td class="">5.0만<span class="m">4% · 17건</span></td></tr></tbody></table></div>
+      <details class="iss-more"><summary>D 합계 24시간 상세 보기</summary><div class="tbl iss-tbl hc-wrap"><table class="h24" id="dHour24"><thead><tr><th>D 합계</th><th>0시</th><th>1시</th><th>2시</th><th>3시</th><th>4시</th><th>5시</th><th>6시</th><th>7시</th><th>8시</th><th>9시</th><th>10시</th><th>11시</th><th>12시</th><th>13시</th><th>14시</th><th>15시</th><th>16시</th><th>17시</th><th>18시</th><th>19시</th><th>20시</th><th>21시</th><th>22시</th><th>23시</th></tr></thead><tbody><tr><td>CPA</td><td class="h3">12.0만<span class="m">3.4%</span></td><td class="h2">9.5만<span class="m">1.5%</span></td><td class="">7.8만<span class="m">1.0%</span></td><td class="">8.2만<span class="m">0.9%</span></td><td class="h2">9.7만<span class="m">1.0%</span></td><td class="h2">10.2만<span class="m">1.7%</span></td><td class="">8.1만<span class="m">2.7%</span></td><td class="">7.9만<span class="m">3.7%</span></td><td class="h1">6.6만<span class="m">4.4%</span></td><td class="">7.0만<span class="m">4.8%</span></td><td class="">7.1만<span class="m">5.1%</span></td><td class="">7.1만<span class="m">5.0%</span></td><td class="">7.3만<span class="m">4.9%</span></td><td class="">7.1만<span class="m">5.0%</span></td><td class="">7.2만<span class="m">5.0%</span></td><td class="">7.5만<span class="m">5.3%</span></td><td class="">7.4만<span class="m">5.6%</span></td><td class="">7.8만<span class="m">5.5%</span></td><td class="">7.4만<span class="m">5.4%</span></td><td class="">7.8만<span class="m">5.9%</span></td><td class="h2">9.3만<span class="m">6.4%</span></td><td class="h2">9.6만<span class="m">6.5%</span></td><td class="h2">9.9만<span class="m">5.4%</span></td><td class="h2">10.4만<span class="m">4.1%</span></td></tr></tbody></table></div></details>
+      <ul class="iss-list">
+        <li>이 보고서는 <b>날짜 구분이 없는 전체 기간 합계</b>라 위쪽 월별·주별·일별 보기에는 넣지 못했어요. D 버튼을 켜려면 G·H처럼 <b>일 × 시간대</b> 보고서가 필요해요.</li>
+        <li>사용 중 캠페인만 들어 있어 계정 전체 비용(7.78억, VAT 포함)의 79%예요. 삭제·일시중지 캠페인은 빠져 있어요.</li>
+        <li>CPA는 구글 전환수 기준이라 시트 실제 유입 기준 CPA와 다를 수 있어요.</li>
       </ul>
     </section>
   </div>
@@ -400,7 +411,7 @@
   </div>
 </div>
 
-<script src="app.js?v=36"></script>
-<script src="hourcpa.js?v=36"></script>
+<script src="app.js?v=38"></script>
+<script src="hourcpa.js?v=38"></script>
 </body>
 </html>
