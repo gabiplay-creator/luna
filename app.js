@@ -120,7 +120,23 @@ function onErr(e) {
   $('loadMsg').textContent = '데이터를 불러오지 못했습니다: ' + (e && e.message ? e.message : e);
 }
 
+/** 'GL(G_1)'처럼 이름에 언더바가 붙은 탭은 다른 탭을 복사한 것이라 집계에서 뺍니다 */
+const COPY_TAB = /_\d*\s*[\)\]]\s*$|_\d+$/;
+function dropCopyTabs(raw) {
+  const src = raw.sources || [];
+  const map = [], keep = [];
+  src.forEach((nm, i) => { if (COPY_TAB.test(String(nm))) map[i] = -1; else { map[i] = keep.length; keep.push(nm); } });
+  if (keep.length === src.length) return;
+  raw.sources = keep;
+  raw.rows = (raw.rows ? raw.rows.split(';') : []).filter(r => {
+    const c = r.indexOf(','), m = map[+r.slice(0, c)];
+    return m !== undefined && m >= 0;
+  }).map(r => { const c = r.indexOf(','); return map[+r.slice(0, c)] + r.slice(c); }).join(';');
+  if (raw.report) raw.report = raw.report.filter(r => !COPY_TAB.test(String(r.name)));
+}
+
 function onData(raw) {
+  dropCopyTabs(raw);
   const parts = raw.rows ? raw.rows.split(';') : [];
   const n = parts.length;
   const A = {
