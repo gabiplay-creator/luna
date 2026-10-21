@@ -14,7 +14,7 @@
   const COLORS = ['#2F5BD3', '#0E8F72', '#C2417A', '#E0A100', '#6A4FC9', '#2BA3B8', '#9AA3AF'];
   const NR = REGIONS.length, ETC = NR - 1, NATION = REGIONS.indexOf('전국');
   const NATION_CH = ['M'];   // 이 채널은 지역 글자가 없으면 '전국' (메타)
-  const st = { period: 'd14', scope: 'all', unit: 'n', end: null };   // end = 기준일 (null이면 오늘)
+  const st = { period: 'd14', scope: 'all', unit: 'n', end: null, cFrom: null, cTo: null };   // cFrom~cTo = 직접 지정 기간   // end = 기준일 (null이면 오늘)
   const $ = id => document.getElementById(id);
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
   const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '-';
@@ -49,6 +49,7 @@
     const end = endDay();
     const t = new Date(end * 864e5), y = t.getUTCFullYear(), m = t.getUTCMonth();
     const first = Math.floor(Date.UTC(y, m, 1) / 864e5);
+    if (st.period === 'custom' && st.cFrom != null && st.cTo != null) return [Math.max(D.min, Math.min(st.cFrom, st.cTo)), Math.min(todayDay(), Math.max(st.cFrom, st.cTo))];
     if (st.period === 'd1') return [end, end];
     if (st.period === 'd7') return [end - 6, end];
     if (st.period === 'd14') return [end - 13, end];
@@ -75,11 +76,15 @@
     if (!sc.some(s => s[0] === st.scope)) st.scope = 'all';
     $('rgScope').innerHTML = sc.map(s => `<button data-k="scope" data-v="${esc(s[0])}" aria-pressed="${s[0] === st.scope}">${esc(s[1])}</button>`).join('');
     document.querySelectorAll('#rgCtrl [data-k="period"], #rgCtrl [data-k="unit"]').forEach(b => b.setAttribute('aria-pressed', String(st[b.dataset.k] === b.dataset.v)));
-    const ed = endDay(), di = $('rgDate');
+    const ed = st.period === 'custom' ? range()[1] : endDay(), di = $('rgDate');
     di.min = iso(D.min); di.max = iso(todayDay()); di.value = iso(ed);
     $('rgPrev').disabled = ed <= D.min; $('rgNext').disabled = ed >= todayDay(); $('rgToday').disabled = ed >= todayDay();
     $('rgDow').textContent = W[new Date(ed * 864e5).getUTCDay()] + '요일' + (ed === todayDay() ? ' · 오늘' : '');
-    const pl = { d1: '하루', d7: '7일', d14: '14일', d30: '30일', month: '그 달 1일부터', prev: '전 달' };
+    const [rf, rt] = range();
+    $('rgFrom').value = iso(rf); $('rgTo').value = iso(rt); $('rgFrom').min = $('rgTo').min = iso(D.min); $('rgFrom').max = $('rgTo').max = iso(todayDay());
+    $('rgDays').textContent = (rt - rf + 1) + '일';
+    $('rgCustom').classList.toggle('on', st.period === 'custom');
+    const pl = { custom: '직접 지정', d1: '하루', d7: '7일', d14: '14일', d30: '30일', month: '그 달 1일부터', prev: '전 달' };
     document.querySelectorAll('#rgCtrl [data-k="period"]').forEach(b => { b.textContent = pl[b.dataset.v]; });
 
     const [from, to] = range(), nd = to - from + 1;
@@ -141,14 +146,27 @@
   document.addEventListener('click', e => {
     const nav = e.target.closest('#rgPrev, #rgNext, #rgToday');
     if (nav && !nav.disabled) {
+      if (st.period === 'custom') {   // 직접 지정 기간은 통째로 하루씩 이동, [오늘]은 끝을 오늘로
+        const [f, t] = range(), n = nav.id === 'rgToday' ? todayDay() - t : (nav.id === 'rgPrev' ? -1 : 1);
+        st.cFrom = f + n; st.cTo = t + n; if (st.cTo > todayDay()) { st.cFrom -= st.cTo - todayDay(); st.cTo = todayDay(); }
+        render(); return;
+      }
       st.end = nav.id === 'rgToday' ? null : endDay() + (nav.id === 'rgPrev' ? -1 : 1);
       if (st.end != null && st.end >= todayDay()) st.end = null;
       render(); return;
     }
     const b = e.target.closest('#rgCtrl [data-k]'); if (!b) return;
+    if (b.dataset.v === 'custom' && st.period !== 'custom') { const [f, t] = range(); st.cFrom = f; st.cTo = t; }
+    if (b.dataset.k === 'period' && b.dataset.v !== 'custom' && st.period === 'custom') { const t = range()[1]; st.end = t >= todayDay() ? null : t; }   // 직접 지정 → 다른 기간: 끝 날짜를 기준일로 유지
     st[b.dataset.k] = b.dataset.v; render();
   });
   document.addEventListener('change', e => {
+    if ((e.target.id === 'rgFrom' || e.target.id === 'rgTo') && e.target.value) {
+      const [f, t] = range(), x = e.target.value.split('-'), d = Math.floor(Date.UTC(+x[0], +x[1] - 1, +x[2]) / 864e5);
+      st.cFrom = e.target.id === 'rgFrom' ? d : f; st.cTo = e.target.id === 'rgTo' ? d : t;
+      if (st.cFrom > st.cTo) { const z = st.cFrom; st.cFrom = st.cTo; st.cTo = z; }
+      st.period = 'custom'; render(); return;
+    }
     if (e.target.id !== 'rgDate' || !e.target.value) return;
     const v = e.target.value.split('-');
     const d = Math.floor(Date.UTC(+v[0], +v[1] - 1, +v[2]) / 864e5);
