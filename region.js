@@ -2,7 +2,7 @@
 (function () {
   // 위에서부터 먼저 맞는 지역으로 분류. 마지막 줄은 '경기'·MASS·MAIN 같은 메인 캠페인 → 경기남부
   const RULES = [
-    ['경기남부', /경기남부|수원|용인/i],
+    ['경기남부', /경기남부|수원|용인|화성|부천|시흥|광명|안산|평택|오산/i],
     ['충청도', /충청|충남|충북|대전|세종/],
     ['서울', /서울/],
     ['전북/강원', /전북|강원/],
@@ -125,7 +125,7 @@
     $('rgChTable').innerHTML = '<thead><tr><th>채널</th>' + REGIONS.map(r => `<th>${r}</th>`).join('') + '<th>합계</th></tr></thead><tbody>' +
       chs.map(c => { const r = chm.get(c), s = r.reduce((a, b) => a + b, 0); return `<tr><td>${esc(D.names[c])}</td>` + r.map(v => `<td>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${fmt(s)}</b></td></tr>`; }).join('') +
       '</tbody>';
-    $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
+    $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
 
   document.addEventListener('click', e => {
