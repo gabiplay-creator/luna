@@ -87,6 +87,7 @@
     const day = Array.from({ length: nd }, () => new Array(NR).fill(0));
     const chm = new Map();
     let noNote = 0;
+    const etcNotes = new Map();
     for (let i = 0; i < D.n; i++) {
       const d = A.day[i]; if (d < from || d > to) continue;
       const c = A.src[i]; if (!inScope(c)) continue;
@@ -96,6 +97,7 @@
       if (!chm.has(c)) chm.set(c, new Array(NR).fill(0));
       chm.get(c)[r]++;
       if (r === ETC && A.note[i] < 0 && A.camp[i] < 0) noNote++;
+      if (r === ETC) { const t = (A.note[i] >= 0 ? D.notes[A.note[i]] : '') || (A.camp[i] >= 0 ? D.campaigns[A.camp[i]] : '') || '(비고 없음)'; const k = D.names[c] + '\u0001' + t; etcNotes.set(k, (etcNotes.get(k) || 0) + 1); }
     }
     const tot = new Array(NR).fill(0); day.forEach(r => r.forEach((v, j) => { tot[j] += v; }));
     const all = tot.reduce((a, b) => a + b, 0);
@@ -130,6 +132,9 @@
     $('rgChTable').innerHTML = '<thead><tr><th>채널</th>' + REGIONS.map(r => `<th>${r}</th>`).join('') + '<th>합계</th></tr></thead><tbody>' +
       chs.map(c => { const r = chm.get(c), s = r.reduce((a, b) => a + b, 0); return `<tr><td>${esc(D.names[c])}</td>` + r.map(v => `<td>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${fmt(s)}</b></td></tr>`; }).join('') +
       '</tbody>';
+    const etcTop = [...etcNotes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 15);
+    $('rgEtc').innerHTML = etcTop.length ? '<summary>기타로 분류된 비고 보기 (' + fmt(tot[ETC]) + '건)</summary><table class="rg-tbl"><thead><tr><th>채널</th><th>비고(캠페인명)</th><th>건수</th></tr></thead><tbody>' +
+      etcTop.map(([k, n]) => { const p = k.split('\u0001'); return `<tr><td>${esc(p[0])}</td><td style="text-align:left;white-space:normal">${esc(p[1])}</td><td>${fmt(n)}</td></tr>`; }).join('') + '</tbody></table>' : '';
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
 
