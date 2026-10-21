@@ -11,7 +11,7 @@
   ];
   const REGIONS = ['경기남부', '충청도', '서울', '전북/강원', '경북', '기타'];
   const COLORS = ['#2F5BD3', '#0E8F72', '#C2417A', '#E0A100', '#6A4FC9', '#9AA3AF'];
-  const st = { period: 'd14', scope: 'all', unit: 'n' };
+  const st = { period: 'd14', scope: 'all', unit: 'n', end: null };   // end = 기준일 (null이면 오늘)
   const $ = id => document.getElementById(id);
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
   const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '-';
@@ -37,13 +37,18 @@
     cacheKey = D; cache = out;
     return out;
   }
+  const todayDay = () => D.asOf ? D.asOf.day : D.max;
+  const endDay = () => { const t = todayDay(); return st.end == null ? t : Math.max(D.min, Math.min(t, st.end)); };
+  const iso = d => new Date(d * 864e5).toISOString().slice(0, 10);
   function range() {
-    const today = D.asOf ? D.asOf.day : D.max;
-    const t = new Date(today * 864e5), y = t.getUTCFullYear(), m = t.getUTCMonth();
+    const end = endDay();
+    const t = new Date(end * 864e5), y = t.getUTCFullYear(), m = t.getUTCMonth();
     const first = Math.floor(Date.UTC(y, m, 1) / 864e5);
-    if (st.period === 'd14') return [today - 13, today];
-    if (st.period === 'd30') return [today - 29, today];
-    if (st.period === 'month') return [first, today];
+    if (st.period === 'd1') return [end, end];
+    if (st.period === 'd7') return [end - 6, end];
+    if (st.period === 'd14') return [end - 13, end];
+    if (st.period === 'd30') return [end - 29, end];
+    if (st.period === 'month') return [first, end];
     return [Math.floor(Date.UTC(y, m - 1, 1) / 864e5), first - 1];
   }
   function scopes() {
@@ -65,6 +70,12 @@
     if (!sc.some(s => s[0] === st.scope)) st.scope = 'all';
     $('rgScope').innerHTML = sc.map(s => `<button data-k="scope" data-v="${esc(s[0])}" aria-pressed="${s[0] === st.scope}">${esc(s[1])}</button>`).join('');
     document.querySelectorAll('#rgCtrl [data-k="period"], #rgCtrl [data-k="unit"]').forEach(b => b.setAttribute('aria-pressed', String(st[b.dataset.k] === b.dataset.v)));
+    const ed = endDay(), di = $('rgDate');
+    di.min = iso(D.min); di.max = iso(todayDay()); di.value = iso(ed);
+    $('rgPrev').disabled = ed <= D.min; $('rgNext').disabled = ed >= todayDay(); $('rgToday').disabled = ed >= todayDay();
+    $('rgDow').textContent = W[new Date(ed * 864e5).getUTCDay()] + '요일' + (ed === todayDay() ? ' · 오늘' : '');
+    const pl = { d1: '하루', d7: '7일', d14: '14일', d30: '30일', month: '그 달 1일부터', prev: '전 달' };
+    document.querySelectorAll('#rgCtrl [data-k="period"]').forEach(b => { b.textContent = pl[b.dataset.v]; });
 
     const [from, to] = range(), nd = to - from + 1;
     const reg = regionOfRows(), A = D.A;
@@ -88,7 +99,7 @@
     // 요약 문장
     const top = REGIONS.slice(0, 5).map((r, j) => [r, tot[j]]).sort((a, b) => b[1] - a[1]);
     $('rgLead').innerHTML = all
-      ? `${md(from)} ~ ${md(to)} <b>${fmt(all)}건</b> 중 <b>${top[0][0]} ${fmt(top[0][1])}건(${pct(top[0][1], all)})</b>이 가장 많고, ${top[1][0]} ${pct(top[1][1], all)}, ${top[2][0]} ${pct(top[2][1], all)} 순이에요.` +
+      ? `${from === to ? md(from) : md(from) + ' ~ ' + md(to)} <b>${fmt(all)}건</b> 중 <b>${top[0][0]} ${fmt(top[0][1])}건(${pct(top[0][1], all)})</b>이 가장 많고, ${top[1][0]} ${pct(top[1][1], all)}, ${top[2][0]} ${pct(top[2][1], all)} 순이에요.` +
         (tot[5] ? ` 지역을 알 수 없는 DB는 <b>${fmt(tot[5])}건(${pct(tot[5], all)})</b>으로 '기타'에 넣었어요.` : '')
       : '선택한 기간·채널에 DB가 없어요.';
 
@@ -99,7 +110,7 @@
     // 일자 × 지역
     const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>`).join('') + '<th>합계</th></tr></thead>';
     let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map(v => `<td>${cell(v, all)}<span class="m">${st.unit === 'n' ? pct(v, all) : fmt(v) + '건'}</span></td>`).join('') + `<td>${fmt(all)}</td></tr>`;
-    body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
+    if (nd > 1) body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
     for (let k = nd - 1; k >= 0; k--) {
       const r = day[k], s = r.reduce((a, b) => a + b, 0), d = from + k;
       const wk = new Date(d * 864e5).getUTCDay();
@@ -118,8 +129,25 @@
   }
 
   document.addEventListener('click', e => {
+    const nav = e.target.closest('#rgPrev, #rgNext, #rgToday');
+    if (nav && !nav.disabled) {
+      st.end = nav.id === 'rgToday' ? null : endDay() + (nav.id === 'rgPrev' ? -1 : 1);
+      if (st.end != null && st.end >= todayDay()) st.end = null;
+      render(); return;
+    }
     const b = e.target.closest('#rgCtrl [data-k]'); if (!b) return;
     st[b.dataset.k] = b.dataset.v; render();
+  });
+  document.addEventListener('change', e => {
+    if (e.target.id !== 'rgDate' || !e.target.value) return;
+    const v = e.target.value.split('-');
+    const d = Math.floor(Date.UTC(+v[0], +v[1] - 1, +v[2]) / 864e5);
+    st.end = d >= todayDay() ? null : d;
+    render();
+  });
+  document.addEventListener('keydown', e => {   // 지역별 화면에서 ← → 키로 하루씩 이동
+    if (typeof S === 'undefined' || S.page !== 'region' || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
+    if (e.key === 'ArrowLeft') $('rgPrev').click(); else if (e.key === 'ArrowRight') $('rgNext').click();
   });
   window.renderRegion = render;
   if (typeof D !== 'undefined' && D) render();

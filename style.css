@@ -521,3 +521,10 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .rg-tbl td.lo { background: #FDECEC; color: #B3261E; font-weight: 600; }
 .rg-k { padding: 0 4px; border-radius: 3px; }
 .rg-k.hi { background: #E6EEFF; color: #1F47B8; } .rg-k.lo { background: #FDECEC; color: #B3261E; }
+.rg-date { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rg-date button { min-width: 34px; height: 34px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; font-size: 18px; line-height: 1; cursor: pointer; color: var(--ink); }
+.rg-date button.rg-today { font-size: 13px; padding: 0 10px; }
+.rg-date button:disabled { color: #C4CAD3; cursor: not-allowed; }
+.rg-date button:not(:disabled):hover { background: #EEF2F8; }
+.rg-date input[type=date] { height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); background: var(--panel); }
+.rg-date .m { font-size: 12px; color: var(--muted); margin-left: 4px; }
