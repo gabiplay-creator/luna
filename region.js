@@ -7,6 +7,7 @@
     ['서울', /서울/],
     ['전북/강원', /전북|강원/],
     ['경북', /경북|대구/],
+    ['전국', /전국/],                 // 캠페인 이름에 '전국'이 들어가면 전국
     ['경기남부', /경기|mass|main/i],
     ['전국', /meta|메타/i]          // 지역이 없는 메타 캠페인 → 전국
   ];
@@ -42,6 +43,18 @@
     cacheKey = D; cache = out;
     return out;
   }
+  let spKey = null, sp = null;   // 캠페인별 광고비 (구글 애즈 스크립트 → 캠페인비용_ 탭)
+  function spend() {
+    if (spKey === D) return sp;
+    spKey = D; sp = null;
+    const cs = D.cspend; if (!cs || !cs.rows) return null;
+    const reg = (cs.names || []).map(classify), rows = [], chs = new Set();
+    cs.rows.split(';').forEach(t => { const p = t.split(','); const c = D.names.indexOf(p[1]); if (c < 0) return; rows.push([+p[0], c, reg[+p[2]], +p[3], +p[2]]); chs.add(c); });
+    const last = rows.reduce((m, r) => Math.max(m, r[0]), 0);
+    sp = { rows: rows, chs: chs, names: cs.names || [], last: last };
+    return sp;
+  }
+  const man = v => v >= 1e4 ? (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + '만' : fmt(v);
   const todayDay = () => D.asOf ? D.asOf.day : D.max;
   const endDay = () => { const t = todayDay(); return st.end == null ? t : Math.max(D.min, Math.min(t, st.end)); };
   const iso = d => new Date(d * 864e5).toISOString().slice(0, 10);
@@ -105,8 +118,29 @@
       if (r === ETC) { const t = (A.note[i] >= 0 ? D.notes[A.note[i]] : '') || (A.camp[i] >= 0 ? D.campaigns[A.camp[i]] : '') || '(비고 없음)'; const k = D.names[c] + '\u0001' + t; etcNotes.set(k, (etcNotes.get(k) || 0) + 1); }
     }
     const tot = new Array(NR).fill(0); day.forEach(r => r.forEach((v, j) => { tot[j] += v; }));
+    // 광고비·CPA (구글 애즈 캠페인 비용이 있는 채널만 비교)
+    const SP = spend(), cost = Array.from({ length: nd }, () => new Array(NR).fill(0)), cdb = Array.from({ length: nd }, () => new Array(NR).fill(0));
+    const chCost = new Map(), chDb = new Map(), etcCamp = new Map();
+    if (SP) {
+      SP.rows.forEach(r => { if (r[0] < from || r[0] > to || !inScope(r[1])) return; cost[r[0] - from][r[2]] += r[3];
+        if (!chCost.has(r[1])) chCost.set(r[1], new Array(NR).fill(0)); chCost.get(r[1])[r[2]] += r[3];
+        if (r[2] === ETC) { const k = D.names[r[1]] + '\u0001' + SP.names[r[4]]; etcCamp.set(k, (etcCamp.get(k) || 0) + r[3]); } });
+      for (let i = 0; i < D.n; i++) {
+        const d = A.day[i]; if (d < from || d > to) continue;
+        const c = A.src[i]; if (!SP.chs.has(c) || !inScope(c)) continue;
+        if (S.dedupe && A.dup[i]) continue;
+        cdb[d - from][reg[i]]++;
+        if (!chDb.has(c)) chDb.set(c, new Array(NR).fill(0)); chDb.get(c)[reg[i]]++;
+      }
+    }
+    const cTot = new Array(NR).fill(0), dTot = new Array(NR).fill(0);
+    cost.forEach(r => r.forEach((v, j) => { cTot[j] += v; })); cdb.forEach(r => r.forEach((v, j) => { dTot[j] += v; }));
+    const cAll = cTot.reduce((a, b) => a + b, 0), dAll = dTot.reduce((a, b) => a + b, 0);
+    const cpa = (c, n) => c && n ? fmt(c / n) : (c ? '<span class="m">DB 0</span>' : '<span class="m">-</span>');
+    const money = st.unit === 'cost' || st.unit === 'cpa';
+    if (money && !SP) st.unit = 'n';
     const all = tot.reduce((a, b) => a + b, 0);
-    const cell = (v, sum) => st.unit === 'n' ? fmt(v) : pct(v, sum);
+    const cell = (v, sum) => st.unit === 'pct' ? pct(v, sum) : fmt(v);
 
     // 요약 문장
     const top = REGIONS.slice(0, ETC).map((r, j) => [r, tot[j]]).sort((a, b) => b[1] - a[1]);
@@ -121,25 +155,42 @@
 
     // 일자 × 지역
     const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>`).join('') + '<th>합계</th></tr></thead>';
-    let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map(v => `<td>${cell(v, all)}<span class="m">${st.unit === 'n' ? pct(v, all) : fmt(v) + '건'}</span></td>`).join('') + `<td>${fmt(all)}</td></tr>`;
+    let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map(v => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span></td>`).join('') + `<td>${fmt(all)}</td></tr>`;
+    if (SP) {
+      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·VAT포함</span></td>' + cTot.map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td>${man(cAll)}</td></tr>`;
+      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">구글 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span></td></tr>`;
+    }
     if (nd > 1) body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
     for (let k = nd - 1; k >= 0; k--) {
       const r = day[k], s = r.reduce((a, b) => a + b, 0), d = from + k;
       const wk = new Date(d * 864e5).getUTCDay();
       body += `<tr${wk === 0 || wk === 6 ? ' class="rg-we"' : ''}><td>${md(d)}${d === (D.asOf && D.asOf.day) ? ' <span class="m">진행 중</span>' : ''}</td>` +
-        r.map((v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }).join('') +
-        `<td><b>${fmt(s)}</b></td></tr>`;
+        (st.unit === 'cost' ? cost[k].map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${man(cost[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
+        : st.unit === 'cpa' ? cost[k].map((v, j) => { const x = v && cdb[k][j] ? v / cdb[k][j] : 0, base = dTot[j] ? cTot[j] / dTot[j] : 0; const cls = x && base && cdb[k][j] >= 3 && Math.abs(x / base - 1) >= 0.25 ? (x < base ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${cpa(v, cdb[k][j])}</td>`; }).join('') + `<td><b>${cpa(cost[k].reduce((a, b) => a + b, 0), cdb[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
+        : r.map((v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }).join('') +
+        `<td><b>${fmt(s)}</b></td></tr>`);
     }
     box.innerHTML = head + '<tbody>' + body + '</tbody>';
 
     // 채널 × 지역
     const chs = [...chm.keys()].sort((a, b) => a - b);
     $('rgChTable').innerHTML = '<thead><tr><th>채널</th>' + REGIONS.map(r => `<th>${r}</th>`).join('') + '<th>합계</th></tr></thead><tbody>' +
-      chs.map(c => { const r = chm.get(c), s = r.reduce((a, b) => a + b, 0); return `<tr><td>${esc(D.names[c])}</td>` + r.map(v => `<td>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${fmt(s)}</b></td></tr>`; }).join('') +
+      chs.map(c => { const r = chm.get(c), s = r.reduce((a, b) => a + b, 0);
+        if (money && SP && SP.chs.has(c)) { const cc = chCost.get(c) || new Array(NR).fill(0), dd = chDb.get(c) || new Array(NR).fill(0), cs = cc.reduce((a, b) => a + b, 0), ds = dd.reduce((a, b) => a + b, 0);
+          return `<tr><td>${esc(D.names[c])}</td>` + cc.map((v, j) => `<td>${st.unit === 'cost' ? (v ? man(v) : '<span class="m">-</span>') : cpa(v, dd[j])}</td>`).join('') + `<td><b>${st.unit === 'cost' ? man(cs) : cpa(cs, ds)}</b></td></tr>`; }
+        if (money) return `<tr><td>${esc(D.names[c])}</td>` + r.map(() => '<td><span class="m">-</span></td>').join('') + '<td><span class="m">비용 없음</span></td></tr>';
+        return `<tr><td>${esc(D.names[c])}</td>` + r.map(v => `<td>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${fmt(s)}</b></td></tr>`; }).join('') +
       '</tbody>';
     const etcTop = [...etcNotes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 15);
     $('rgEtc').innerHTML = etcTop.length ? '<summary>기타로 분류된 비고 보기 (' + fmt(tot[ETC]) + '건)</summary><table class="rg-tbl"><thead><tr><th>채널</th><th>비고(캠페인명)</th><th>건수</th></tr></thead><tbody>' +
       etcTop.map(([k, n]) => { const p = k.split('\u0001'); return `<tr><td>${esc(p[0])}</td><td style="text-align:left;white-space:normal">${esc(p[1])}</td><td>${fmt(n)}</td></tr>`; }).join('') + '</tbody></table>' : '';
+    if (SP && etcCamp.size) {
+      const ec = [...etcCamp.entries()].sort((x, y) => y[1] - x[1]).slice(0, 10);
+      $('rgEtc').innerHTML += '<p class="m" style="margin:10px 0 4px">기타로 분류된 캠페인 광고비</p><table class="rg-tbl"><thead><tr><th>채널</th><th>캠페인</th><th>광고비</th></tr></thead><tbody>' +
+        ec.map(([k, v]) => { const p = k.split('\u0001'); return `<tr><td>${esc(p[0])}</td><td style="text-align:left;white-space:normal">${esc(p[1])}</td><td>${man(v)}</td></tr>`; }).join('') + '</tbody></table>';
+      if (!$('rgEtc').querySelector('summary')) $('rgEtc').insertAdjacentHTML('afterbegin', '<summary>세부정보</summary>');
+    }
+    $('rgSpNote').textContent = SP ? '광고비·CPA: 구글 애즈 캠페인 이름의 지역 글자로 나눈 금액(부가세 포함) ÷ 같은 지역 DB (구글 채널 ' + [...SP.chs].map(c => D.names[c]).join('·') + ')' + ' · 광고비 ' + md(SP.last) + '까지' : '광고비·CPA는 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 나와요.';
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
 

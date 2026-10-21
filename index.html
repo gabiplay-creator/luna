@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>글로벌랩스 DB 대시보드</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="style.css?v=51">
+<link rel="stylesheet" href="style.css?v=52">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="config.js?v=47"></script>
 </head>
@@ -253,13 +253,14 @@
         <div class="frow"><span class="flabel">기준일</span><div class="rg-date"><button id="rgPrev" title="하루 전 (← 키)" aria-label="하루 전">‹</button><input type="date" id="rgDate" aria-label="기준일 선택"><button id="rgNext" title="하루 뒤 (→ 키)" aria-label="하루 뒤">›</button><button id="rgToday" class="rg-today">오늘</button><span class="m" id="rgDow"></span></div></div>
         <div class="frow"><span class="flabel">기간</span><div class="seg"><button data-k="period" data-v="d1">하루</button><button data-k="period" data-v="d7">7일</button><button data-k="period" data-v="d14">14일</button><button data-k="period" data-v="d30">30일</button><button data-k="period" data-v="month">그 달 1일부터</button><button data-k="period" data-v="prev">전 달</button><button data-k="period" data-v="custom">직접 지정</button></div></div>
         <div class="frow rg-custom" id="rgCustom"><span class="flabel">기간 지정</span><div class="rg-date"><input type="date" id="rgFrom" aria-label="시작일"><span class="m">~</span><input type="date" id="rgTo" aria-label="종료일"><span class="m" id="rgDays"></span></div></div>
-        <div class="frow"><span class="flabel">표시</span><div class="seg"><button data-k="unit" data-v="n">건수</button><button data-k="unit" data-v="pct">비중</button></div></div>
+        <div class="frow"><span class="flabel">표시</span><div class="seg"><button data-k="unit" data-v="n">건수</button><button data-k="unit" data-v="pct">비중</button><button data-k="unit" data-v="cost">광고비</button><button data-k="unit" data-v="cpa">CPA</button></div></div>
         <div class="frow" style="width:100%"><span class="flabel">채널</span><div class="seg rg-scope" id="rgScope"></div></div>
       </div>
       <div class="rg-bar" id="rgBar"></div>
       <div class="rg-legend" id="rgLegend"></div>
       <div class="tbl iss-tbl hc-wrap"><table id="rgTable" class="rg-tbl"></table></div>
       <details class="rg-etc" id="rgEtc"></details>
+      <p class="note" id="rgSpNote"></p>
       <p class="note">하루 지역 비중이 기간 평균보다 8%p 이상 높으면 <span class="rg-k hi">파란색</span>, 낮으면 <span class="rg-k lo">빨간색</span>으로 표시해요 (하루 10건 이상일 때).</p>
     </section>
     <section class="card" style="margin-top:14px">
@@ -450,6 +451,6 @@
 <script src="app.js?v=47"></script>
 <script src="hourcpa.js?v=47"></script>
 <script src="alerts.js?v=47"></script>
-<script src="region.js?v=51"></script>
+<script src="region.js?v=52"></script>
 </body>
 </html>
