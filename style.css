@@ -531,3 +531,4 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .rg-etc { margin: 8px 0 4px; font-size: 13px; } .rg-etc summary { cursor: pointer; color: var(--muted); padding: 4px 0; } .rg-etc table { margin-top: 6px; }
 .rg-custom .rg-date input { width: 150px; } .rg-custom:not(.on) input { color: var(--muted); } .rg-custom.on input { border-color: #2F5BD3; box-shadow: 0 0 0 2px #E6EEFF; }
 .rg-tbl tr.rg-money td { background: #F3F6FB; font-weight: 600; }
+.rg-tbl tr.rg-ads td { background: #F7F9FC; font-weight: 500; }
