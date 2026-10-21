@@ -48,11 +48,15 @@
   function spend() {
     if (spKey === D) return sp;
     spKey = D; sp = null;
-    const cs = D.cspend; if (!cs || !cs.rows) return null;
-    const reg = (cs.names || []).map(classify), rows = [], chs = new Set();
-    cs.rows.split(';').forEach(t => { const p = t.split(','); const c = D.names.indexOf(p[1]); if (c < 0) return; rows.push([+p[0], c, reg[+p[2]], +p[3], +p[2]]); chs.add(c); });
+    const cs = D.cspend || {}, rows = [], chs = new Set(), nat = new Set();
+    const reg = (cs.names || []).map(classify);
+    if (cs.rows) cs.rows.split(';').forEach(t => { const p = t.split(','); const c = D.names.indexOf(p[1]); if (c < 0) return; rows.push([+p[0], c, reg[+p[2]], +p[3], +p[2]]); chs.add(c); });
+    // 메타(M)는 캠페인별 비용이 없어 '광고비_메타' 일자별 금액(VAT 포함)을 통째로 '전국'에 넣어요.
+    NATION_CH.forEach(n => { const c = D.names.indexOf(n); if (c < 0 || chs.has(c) || !D.spendCh || !D.spendCh[c] || !D.spendCh[c].size) return;
+      D.spendCh[c].forEach((v, d) => { if (v) rows.push([d, c, NATION, v, -1]); }); chs.add(c); nat.add(c); });
+    if (!rows.length) return null;
     const last = rows.reduce((m, r) => Math.max(m, r[0]), 0);
-    sp = { rows: rows, chs: chs, names: cs.names || [], last: last };
+    sp = { rows: rows, chs: chs, nat: nat, names: cs.names || [], last: last };
     return sp;
   }
   const man = v => v >= 1e4 ? (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + '만' : fmt(v);
@@ -130,8 +134,9 @@
         const d = A.day[i]; if (d < from || d > to) continue;
         const c = A.src[i]; if (!SP.chs.has(c) || !inScope(c)) continue;
         if (S.dedupe && A.dup[i]) continue;
-        cdb[d - from][reg[i]]++;
-        if (!chDb.has(c)) chDb.set(c, new Array(NR).fill(0)); chDb.get(c)[reg[i]]++;
+        const rr = SP.nat.has(c) ? NATION : reg[i];   // 메타는 광고비를 나눌 수 없어 DB도 전부 '전국'으로 맞춰 CPA 계산
+        cdb[d - from][rr]++;
+        if (!chDb.has(c)) chDb.set(c, new Array(NR).fill(0)); chDb.get(c)[rr]++;
       }
     }
     const cTot = new Array(NR).fill(0), dTot = new Array(NR).fill(0);
@@ -158,8 +163,8 @@
     const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>`).join('') + '<th>합계</th></tr></thead>';
     let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map(v => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span></td>`).join('') + `<td>${fmt(all)}</td></tr>`;
     if (SP) {
-      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·VAT포함</span></td>' + cTot.map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td>${man(cAll)}</td></tr>`;
-      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">구글 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span></td></tr>`;
+      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·메타·VAT포함</span></td>' + cTot.map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td>${man(cAll)}</td></tr>`;
+      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">광고비 있는 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span></td></tr>`;
     }
     if (nd > 1) body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
     for (let k = nd - 1; k >= 0; k--) {
@@ -191,7 +196,7 @@
         ec.map(([k, v]) => { const p = k.split('\u0001'); return `<tr><td>${esc(p[0])}</td><td style="text-align:left;white-space:normal">${esc(p[1])}</td><td>${man(v)}</td></tr>`; }).join('') + '</tbody></table>';
       if (!$('rgEtc').querySelector('summary')) $('rgEtc').insertAdjacentHTML('afterbegin', '<summary>세부정보</summary>');
     }
-    $('rgSpNote').textContent = SP ? '광고비·CPA: 구글 애즈 캠페인 이름의 지역 글자로 나눈 금액(부가세 포함) ÷ 같은 지역 DB (구글 채널 ' + [...SP.chs].map(c => D.names[c]).join('·') + ')' + ' · 광고비 ' + md(SP.last) + '까지' : '광고비·CPA는 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 나와요.';
+    $('rgSpNote').textContent = SP ? '광고비·CPA: 구글 애즈 캠페인 이름의 지역 글자로 나눈 금액(부가세 포함) ÷ 같은 지역 DB (' + [...SP.chs].filter(c => !SP.nat.has(c)).map(c => D.names[c]).join('·') + ')' + (SP.nat.size ? ' · 메타(' + [...SP.nat].map(c => D.names[c]).join('·') + ')는 광고비·DB 모두 전국으로 계산' : '') + ' · 광고비 ' + md(SP.last) + '까지' : '광고비·CPA는 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 나와요.';
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
 
