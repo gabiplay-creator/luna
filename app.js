@@ -31,7 +31,7 @@ Chart.defaults.maintainAspectRatio = false;
 Chart.defaults.plugins.legend.display = false;
 
 let D = null;
-const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: ['#rank', '#goal', '#hour', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', rankKey: 'all' };
+const S = { from: 0, to: 0, src: new Set(), dedupe: false, trend: 'day', stack: 'channel', dim: 'source', preset: 'all', liveKey: 'all', auto: true, open: new Set(), cmpBase: 'month', cmpMetric: 'share', page: ['#rank', '#goal', '#hour', '#region', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', rankKey: 'all' };
 const charts = {};
 const CFG = window.DASHBOARD_CONFIG || {};
 
@@ -173,6 +173,7 @@ function onData(raw) {
   renderLive();
   renderSpend();
   if (window.renderAlerts) window.renderAlerts();
+  if (window.renderRegion) window.renderRegion();
   $('meta').textContent = '데이터 기준 ' + D.generatedAt + (D.buildSec ? ' (계산 ' + D.buildSec + '초)' : '') + '   |   범위 ' + fmtDay(D.min) + ' ~ ' + fmtDay(D.max) +
     (D.newNames.length ? '   |   새 채널 ' + D.newNames.join(', ') + ' 인식됨 (지원군)' : '');
   renderReport();
@@ -314,20 +315,21 @@ $('chips').addEventListener('click', e => {
   syncControls(); render();
 });
 $('allSrc').addEventListener('click', () => { S.src = new Set(D.names.map((_, i) => i)); syncControls(); render(); });
-function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); renderGoal(); if (window.renderAlerts) window.renderAlerts(); }
+function setDedupe(v) { S.dedupe = v; $('dedupe').checked = v; $('dedupe2').checked = v; render(); renderLive(); renderSpend(); renderRank(); renderGoal(); if (window.renderAlerts) window.renderAlerts(); if (window.renderRegion) window.renderRegion(); }
 $('dedupe').addEventListener('change', e => setDedupe(e.target.checked));
 $('dedupe2').addEventListener('change', e => setDedupe(e.target.checked));
 $('rankTarget').addEventListener('change', e => { S.rankKey = e.target.value; renderRank(); });
 document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) showPage(b.dataset.page, true); });
-window.addEventListener('hashchange', () => showPage(['#rank', '#goal', '#hour', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', false));
+window.addEventListener('hashchange', () => showPage(['#rank', '#goal', '#hour', '#region', '#issue'].includes(location.hash) ? location.hash.slice(1) : 'live', false));
 
 function showPage(p, push) {
   S.page = p;
-  ['live', 'rank', 'goal', 'hour', 'issue'].forEach(k => { const el = document.getElementById('page-' + k); if (el) el.hidden = p !== k; });
+  ['live', 'rank', 'goal', 'hour', 'region', 'issue'].forEach(k => { const el = document.getElementById('page-' + k); if (el) el.hidden = p !== k; });
   document.querySelectorAll('.tabs [data-page]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === p)));
   if (push) history.replaceState(null, '', p === 'live' ? location.pathname + location.search : '#' + p);
   if (p === 'rank') renderRank();
   else if (p === 'goal') renderGoal();
+  else if (p === 'region' && window.renderRegion) window.renderRegion();
   else Object.values(charts).forEach(c => c.resize());
   if (push) window.scrollTo(0, 0);
 }

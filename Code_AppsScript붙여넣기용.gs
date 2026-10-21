@@ -20,6 +20,9 @@ const PREFERRED_ORDER = ['GL(G)', 'GL(H)', 'GL(D)', 'GL(B)', 'GL(U)', 'GL(M)', '
 // 형식은 맞지만 대시보드에서 빼고 싶은 탭이 있으면 여기에 이름을 적으세요. 예: ['GL(X)']
 const EXCLUDE_SHEETS = [];
 
+// 이름이 GL(…) 형식은 아니지만 DB 원본으로 읽을 탭 (A열 일자 · C열 연락처 형식이면 됨)
+const EXTRA_SOURCE_TABS = ['PLAN', '홈페이지'];
+
 // 칸 이름 후보 (새 탭의 칸 이름이 조금 달라도 찾을 수 있게)
 const DATE_HEADERS = ['일자', '제출일시', '날짜', '일시', '접수일시', '신청일시', '등록일시', '타임스탬프', 'timestamp', 'date', 'created_time', 'created_at'];
 const PHONE_HEADERS = ['연락처', '전화번호', '휴대폰', '휴대폰번호', '핸드폰', 'phone', 'phone_number', 'tel'];
@@ -53,6 +56,7 @@ function setupCacheTrigger() {
 /** 트리거가 실행: 시트를 읽어 결과를 저장 (실행 시간이 로그에 남아요) */
 function warmCache() {
   const t0 = Date.now();
+  try { syncCrmSpendThrottled_(); } catch (e) { Logger.log('CRM 광고비 가져오기 실패: ' + e.message); }
   const json = buildAndCache_(true);
   Logger.log('미리 계산 완료: ' + ((Date.now() - t0) / 1000).toFixed(1) + '초, ' + Math.round(json.length / 1024) + 'KB');
 }
@@ -138,6 +142,7 @@ function getDashboardData() {
 
     const seen = new Set();
     let rows = 0, skipped = 0, noTime = 0, dupCount = 0;
+    const copyNote = copyNoteMap_(ss, name);   // GL(G) → GL(G_1) 복사 탭의 비고(캠페인명)로 빈 비고 채우기 (지역 통계용)
 
     for (let i = 0; i < values.length; i++) {
       const r = values[i];
@@ -151,7 +156,9 @@ function getDashboardData() {
       if (phone) {
         if (seen.has(phone)) { dup = 1; dupCount++; } else { seen.add(phone); }
       }
-      const note = cNote >= 0 ? notes.id(r[cNote]) : -1;
+      let noteText = cNote >= 0 ? String(r[cNote] == null ? '' : r[cNote]).trim() : '';
+      if (!noteText && copyNote && phone) noteText = copyNote.get(phone + '|' + t.day) || '';
+      const note = notes.id(noteText);
       const plat = cPlat >= 0 ? platforms.id(r[cPlat]) : -1;
       const camp = cCamp >= 0 ? campaigns.id(r[cCamp]) : -1;
 
@@ -267,11 +274,11 @@ function readGoals_(ss) {
 }
 
 // 같은 날짜·채널 광고비가 여러 탭에 있으면 앞쪽 탭 값을 씁니다 (API 자동 수집 > 수기 입력).
-const SPEND_TAB_PRIORITY = ['광고비_구글', '광고비_메타', '광고비_틱톡', '광고비_수동'];
+const SPEND_TAB_PRIORITY = ['광고비_구글', '광고비_메타', '광고비_틱톡', '광고비_수동', '광고비_CRM'];
 // 매체 API 금액은 부가세 미포함이라, 수기 입력(VAT 포함)과 맞추기 위해 곱합니다. 미포함으로 보고 싶으면 1로 바꾸세요.
-const SPEND_VAT = { '광고비_구글': 1.1, '광고비_메타': 1.1, '광고비_틱톡': 1.1 };
+const SPEND_VAT = { '광고비_구글': 1.1, '광고비_메타': 1.1, '광고비_틱톡': 1.1, '광고비_CRM': 1 };
 // 탭 전체가 아니라 특정 채널만 VAT를 더해야 할 때 (중복보고의 M은 메타 지출 원금 = VAT 별도)
-const SPEND_VAT_CH = { '광고비_수동': { 'M': 1.1 } };
+const SPEND_VAT_CH = { '광고비_수동': { 'M': 1.1 }, '광고비_CRM': { 'M': 1.1 } }; // CRM의 M도 중복보고와 같은 VAT 별도 금액
 
 /**
  * '광고비'로 시작하는 탭을 읽어 일자·채널별 금액을 'day,채널,금액;…' 형태로 반환합니다.
@@ -306,10 +313,13 @@ function readSpend_(ss) {
 /** GL(…) 형식의 탭을 찾아 표시 순서대로 반환 */
 function getSourceSheets_(ss) {
   const names = ss.getSheets().map(function (sh) { return sh.getName(); }).filter(function (n) {
-    return CHANNEL_PATTERN.test(String(n).trim()) && EXCLUDE_SHEETS.indexOf(n) < 0;
+    if (EXTRA_SOURCE_TABS.indexOf(String(n).trim()) >= 0) return true;
+    return CHANNEL_PATTERN.test(String(n).trim()) && EXCLUDE_SHEETS.indexOf(n) < 0 && !/_\d*\s*[\)\]]\s*$/.test(String(n).trim()); // GL(G_1) 같은 복사 탭 제외
   });
   const pref = PREFERRED_ORDER.filter(function (n) { return names.indexOf(n) >= 0; });
-  return pref.concat(names.filter(function (n) { return pref.indexOf(n) < 0; }));
+  const rest = names.filter(function (n) { return pref.indexOf(n) < 0 && EXTRA_SOURCE_TABS.indexOf(n) < 0; });
+  const extra = EXTRA_SOURCE_TABS.filter(function (n) { return names.indexOf(n) >= 0; });
+  return pref.concat(rest, extra);
 }
 
 /**
@@ -423,4 +433,114 @@ function upsertManualDb_(rows) {
     }
     return saved;
   } finally { lock.releaseLock(); }
+}
+
+
+/* ================= 오전 보고(tiger_2) → '광고비_CRM' 탭 =================
+ * 아임웹 tiger_2에 매일 붙여넣는 CRM '전일 하루' 표의 채널별 광고비를 가져옵니다.
+ * tiger_2는 업무보고서버(Apps Script)에 날짜별로 저장되므로 그 주소에서 읽습니다. 이름·연락처는 없습니다.
+ * 처음 한 번: 함수 목록에서 syncCrmSpend 를 선택해 ▷ 실행 → 권한 허용 (외부 주소 읽기 권한)
+ * 그 뒤로는 warmCache 트리거가 30분마다 자동으로 다시 가져옵니다.
+ */
+const CRM_REPORT_URL = 'https://script.google.com/macros/s/AKfycby8UcfEX-9GRYMEaymEHZL5nDf7KXRitDkk8t1x7-W8lD5mRsfmZJDXaW9BmJbMR9bZ/exec?ns=tiger2&since=0';
+const CRM_TAB = '광고비_CRM';
+const CRM_DAY_OFFSET = 0;    // 확인 결과 tiger_2 날짜 = 광고비·DB가 발생한 날짜 (중복보고 값과 일치)
+const CRM_FROM = '2026-09-30'; // tiger_2를 매일 쓰기 시작한 날. 그 전 기록(월말 몇 건)은 형식이 달라 제외
+const CRM_OUTLIER = 3;       // 채널 평소(중앙값)의 3배를 넘는 날은 '당월 누적'을 잘못 붙여넣은 것으로 보고 제외
+const CRM_EVERY_MIN = 30;
+const CRM_CH_NAME = { HOME: '홈페이지' };   // tiger_2 키 → 대시보드 채널 이름 (ETC=기타매체는 제외)
+
+function syncCrmSpendThrottled_() {
+  const props = PropertiesService.getScriptProperties();
+  const last = Number(props.getProperty('crm_spend_at') || 0);
+  if (Date.now() - last < CRM_EVERY_MIN * 60000) return;
+  props.setProperty('crm_spend_at', String(Date.now()));
+  syncCrmSpend();
+}
+
+function syncCrmSpend() {
+  const res = UrlFetchApp.fetch(CRM_REPORT_URL, { muteHttpExceptions: true, followRedirects: true });
+  if (res.getResponseCode() !== 200) throw new Error('응답 ' + res.getResponseCode());
+  const body = JSON.parse(res.getContentText());
+  if (!body.ok) throw new Error(body.error || '업무보고서버 응답 오류');
+  const num = function (x) { const n = Number(String(x == null ? '' : x).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : 0; };
+  const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+  let diag = '';
+  const out = [];
+  const addDay = function (key, d) {
+    const m = String(key).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m || !d || typeof d !== 'object' || !d.rows) return false;
+    const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + CRM_DAY_OFFSET));
+    const day = Utilities.formatDate(dt, 'UTC', 'yyyy-MM-dd'), rep = m[0];
+    Object.keys(d.rows).forEach(function (k) {
+      if (k === 'ETC' || !d.rows[k]) return;
+      const cost = num(d.rows[k].cost);
+      if (cost > 0) out.push([day, CRM_CH_NAME[k] || k, 'CRM', Math.round(cost), rep, num(d.rows[k].in), now]);
+    });
+    return true;
+  };
+  const rows = body.rows || [];
+  rows.forEach(function (r) {
+    let d = r.v;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { return; } }
+    if (addDay(r.k, d)) return;
+    // 한 키에 여러 날짜가 통째로 저장된 경우 { '2026-10-16': {...}, ... }
+    if (d && typeof d === 'object') Object.keys(d).forEach(function (k2) { addDay(k2, d[k2]); });
+  });
+  // 진단: 하나도 못 찾으면 서버가 준 키 모양을 I열에 남김 (값 내용은 남기지 않음)
+  diag = '받은 행 ' + rows.length + ' / 키 예시: ' + rows.slice(0, 8).map(function (r) {
+    let t = typeof r.v; try { const o = JSON.parse(r.v); t = Array.isArray(o) ? 'array' : typeof o; if (o && typeof o === 'object' && !Array.isArray(o)) t += '{' + Object.keys(o).slice(0, 6).join(',') + '}'; } catch (e) {}
+    return r.k + ':' + t;
+  }).join(' | ');
+  // 시작일 이전 제외 + 채널별 중앙값의 CRM_OUTLIER배를 넘는 날 제외 (당월 누적 오입력 방지)
+  const byCh = {};
+  out.forEach(function (r) { (byCh[r[1]] = byCh[r[1]] || []).push(r[3]); });
+  const med = {};
+  Object.keys(byCh).forEach(function (c) { const a = byCh[c].slice().sort(function (x, y) { return x - y; }); med[c] = a[Math.floor(a.length / 2)]; });
+  const skipped = [];
+  for (let i = out.length - 1; i >= 0; i--) {
+    const r = out[i];
+    if (r[0] < CRM_FROM) { out.splice(i, 1); continue; }
+    // PLAN은 DB당 단가제라 DB가 많으면 금액도 커져서 이상치 검사에서 제외
+    if (r[1] !== 'PLAN' && med[r[1]] && r[3] > med[r[1]] * CRM_OUTLIER) { skipped.push(r[0] + ' ' + r[1]); out.splice(i, 1); }
+  }
+  if (skipped.length) diag = '이상치로 제외: ' + skipped.join(', ');
+  out.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : String(a[1]).localeCompare(String(b[1])); });
+  const ss = SpreadsheetApp.openById('1GgecwoK7Fp5Px_DSFFPgq0a3zYnx6KLgkrqe18k32nk');
+  const sh = ss.getSheetByName(CRM_TAB) || ss.insertSheet(CRM_TAB);
+  sh.clearContents();
+  sh.getRange(1, 1, 1, 7).setValues([['일자', '채널', '매체', '광고비', 'tiger_2 날짜', 'CRM DB수', '갱신시각']]);
+  if (out.length) {
+    sh.getRange(2, 1, out.length, 1).setNumberFormat('@');
+    sh.getRange(2, 5, out.length, 1).setNumberFormat('@');
+    sh.getRange(2, 1, out.length, 7).setValues(out);
+  }
+  sh.getRange(1, 9).setValue(diag);
+  Logger.log('CRM 광고비 ' + out.length + '행 기록 (' + now + ') ' + diag);
+  return out.length;
+}
+
+
+/* ================= 복사 탭(GL(G_1) 등)의 비고 → 원본 행에 붙이기 =================
+ * GL(G)·GL(M)처럼 원본에 캠페인명(비고)이 없는 채널은, 같은 데이터에 캠페인명이 붙은 복사 탭(GL(G_1))이 있어요.
+ * 복사 탭은 DB 수량에는 넣지 않고, '연락처 + 날짜'가 같은 행의 비고만 가져와 지역별 통계에 씁니다.
+ */
+function copyNoteMap_(ss, name) {
+  const m = String(name).match(/^(GL\s*[\(\[]\s*)(.+?)(\s*[\)\]])$/i);
+  if (!m) return null;
+  const sh = ss.getSheetByName(m[1] + m[2] + '_1' + m[3]);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const lastCol = Math.max(1, sh.getLastColumn());
+  const lower = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  const find = function (cands) { for (let k = 0; k < cands.length; k++) { const i = lower.indexOf(cands[k].toLowerCase()); if (i >= 0) return i; } return -1; };
+  const cD = Math.max(0, find(DATE_HEADERS)), cP = find(PHONE_HEADERS), cN = lower.indexOf('비고');
+  if (cP < 0 || cN < 0) return null;
+  const width = Math.max(cD, cP, cN) + 1;
+  const map = new Map();
+  sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues().forEach(function (r) {
+    const note = String(r[cN] == null ? '' : r[cN]).trim(); if (!note) return;
+    const t = parseTs(r[cD]), p = normPhone(r[cP]); if (!t || !p) return;
+    const k = p + '|' + t.day; if (!map.has(k)) map.set(k, note);
+  });
+  return map;
 }

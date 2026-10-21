@@ -503,3 +503,21 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 #hcTable tr.hc-avg td { font-weight: 700; background: #EEF2F8; border-bottom: 2px solid var(--line); position: sticky; top: 33px; z-index: 1; }
 #hcTable tr.hc-avg td:first-child { z-index: 2; }
 #hcTable tr.hc-avg td .m { font-weight: 400; }
+
+/* 지역별 */
+.rg-scope { flex-wrap: wrap; }
+.rg-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #EEF1F5; margin: 4px 0 8px; }
+.rg-bar i { display: block; height: 100%; }
+.rg-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.rg-legend i, .rg-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.rg-tbl td, .rg-tbl th { text-align: right; white-space: nowrap; }
+.rg-tbl td:first-child, .rg-tbl th:first-child { text-align: left; }
+.rg-tbl td .m { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.rg-tbl td:first-child .m { display: inline; }
+.rg-tbl tr.rg-sum td { font-weight: 700; background: #EEF2F8; }
+.rg-tbl tr.rg-avg td { font-weight: 500; border-bottom: 2px solid var(--line); }
+.rg-tbl tr.rg-we td:first-child { color: #C2413A; }
+.rg-tbl td.hi { background: #E6EEFF; color: #1F47B8; font-weight: 600; }
+.rg-tbl td.lo { background: #FDECEC; color: #B3261E; font-weight: 600; }
+.rg-k { padding: 0 4px; border-radius: 3px; }
+.rg-k.hi { background: #E6EEFF; color: #1F47B8; } .rg-k.lo { background: #FDECEC; color: #B3261E; }

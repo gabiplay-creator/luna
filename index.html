@@ -6,9 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 <title>글로벌랩스 DB 대시보드</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="style.css?v=46">
+<link rel="stylesheet" href="style.css?v=47">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="config.js?v=46"></script>
+<script src="config.js?v=47"></script>
 </head>
 <body>
 <div class="overlay" id="overlay"><div id="loadMsg">시트에서 데이터를 불러오는 중입니다…</div><div class="note">데이터가 많으면 10~40초 걸릴 수 있어요.</div></div>
@@ -24,6 +24,7 @@
       <button role="tab" data-page="rank" aria-selected="false">순위</button>
       <button role="tab" data-page="goal" aria-selected="false">목표</button>
       <button role="tab" data-page="hour" aria-selected="false">시간별</button>
+      <button role="tab" data-page="region" aria-selected="false">지역별</button>
       <button role="tab" data-page="issue" aria-selected="false">이슈정리</button>
     </nav>
     <div class="head-right">
@@ -244,6 +245,25 @@
     </div>
     <p class="note rank-foot">목표는 시트의 <b>목표</b> 탭(월 | 구분 | 목표DB)에서 읽어요. "어제까지"는 오늘을 뺀 확정 수량이고, 하루 필요량은 남은 수량을 오늘 포함 남은 날 수로 나눈 값이에요. 자동 시트가 없는 채널은 <b>수동DB</b> 탭(일자 | 채널 | DB수) 입력분으로 계산하고, 같은 날짜·채널에 자동 데이터가 생기면 자동 데이터를 우선해요. 위쪽 중복 제외 옵션이 적용돼요.</p>
   </div>
+  <div id="page-region" hidden>
+    <section class="card">
+      <div class="chead"><h2>일자별 지역 DB</h2><span class="note" id="rgNote"></span></div>
+      <p class="iss-lead" style="font-size:15px" id="rgLead"></p>
+      <div class="hc-ctrl" id="rgCtrl">
+        <div class="frow"><span class="flabel">기간</span><div class="seg"><button data-k="period" data-v="d14">최근 14일</button><button data-k="period" data-v="d30">최근 30일</button><button data-k="period" data-v="month">이번 달</button><button data-k="period" data-v="prev">지난 달</button></div></div>
+        <div class="frow"><span class="flabel">표시</span><div class="seg"><button data-k="unit" data-v="n">건수</button><button data-k="unit" data-v="pct">비중</button></div></div>
+        <div class="frow" style="width:100%"><span class="flabel">채널</span><div class="seg rg-scope" id="rgScope"></div></div>
+      </div>
+      <div class="rg-bar" id="rgBar"></div>
+      <div class="rg-legend" id="rgLegend"></div>
+      <div class="tbl iss-tbl hc-wrap"><table id="rgTable" class="rg-tbl"></table></div>
+      <p class="note">하루 지역 비중이 기간 평균보다 8%p 이상 높으면 <span class="rg-k hi">파란색</span>, 낮으면 <span class="rg-k lo">빨간색</span>으로 표시해요 (하루 10건 이상일 때).</p>
+    </section>
+    <section class="card" style="margin-top:14px">
+      <div class="chead"><h2>채널 × 지역 (선택 기간)</h2></div>
+      <div class="tbl iss-tbl"><table id="rgChTable" class="rg-tbl"></table></div>
+    </section>
+  </div>
   <div id="page-hour" hidden>
     <section class="card iss-card" id="gHourCpa">
       <div class="chead"><h2>채널 시간대별 CPA</h2><span class="note" id="hcNote"></span></div>
@@ -424,8 +444,9 @@
   </div>
 </div>
 
-<script src="app.js?v=46"></script>
-<script src="hourcpa.js?v=46"></script>
-<script src="alerts.js?v=46"></script>
+<script src="app.js?v=47"></script>
+<script src="hourcpa.js?v=47"></script>
+<script src="alerts.js?v=47"></script>
+<script src="region.js?v=47"></script>
 </body>
 </html>
