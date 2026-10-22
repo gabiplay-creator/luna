@@ -16,7 +16,7 @@
   const COLORS = ['#2F5BD3', '#0E8F72', '#C2417A', '#E0A100', '#6A4FC9', '#2BA3B8', '#9AA3AF'];
   const NR = REGIONS.length, ETC = NR - 1, NATION = REGIONS.indexOf('전국');
   const NATION_CH = ['M'];   // 이 채널은 지역 글자가 없으면 '전국' (메타)
-  const st = { period: 'd14', scope: 'all', unit: 'n', end: null, cFrom: null, cTo: null };   // cFrom~cTo = 직접 지정 기간   // end = 기준일 (null이면 오늘)
+  const st = { period: 'd14', scope: 'all', unit: 'n', end: null, cFrom: null, cTo: null, cmp: false, kFrom: null, kTo: null, chg: false, chgType: 'all' };   // cmp = 비교, kFrom~kTo = 직접 지정 비교 기간(null이면 자동), chg = 변경이력   // cFrom~cTo = 직접 지정 기간   // end = 기준일 (null이면 오늘)
   const $ = id => document.getElementById(id);
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
   const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '-';
@@ -87,6 +87,92 @@
     return String(c) === st.scope.slice(3);
   }
 
+  // 비교 기간 기본값: 하루 → 전일, 7일 → 전주, 그 달 1일부터 → 전월 같은 기간, 전 달 → 그 전 달, 나머지 → 바로 앞 같은 길이
+  function cmpRange(from, to) {
+    if (st.kFrom != null && st.kTo != null) return [Math.min(st.kFrom, st.kTo), Math.max(st.kFrom, st.kTo), '직접 지정'];
+    const ymd = d => { const t = new Date(d * 864e5); return [t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()]; };
+    const dd = (y, m, d) => Math.floor(Date.UTC(y, m, d) / 864e5);
+    if (st.period === 'month') { const [y, m, d] = ymd(to), last = new Date(Date.UTC(y, m, 0)).getUTCDate(); return [dd(y, m - 1, 1), dd(y, m - 1, Math.min(d, last)), '전월 같은 기간']; }
+    if (st.period === 'prev') { const [y, m] = ymd(from); return [dd(y, m - 1, 1), from - 1, '그 전 달']; }
+    const n = to - from + 1;
+    return [from - n, from - 1, { d1: '전일', d7: '전주', d14: '직전 14일', d30: '직전 30일' }[st.period] || '직전 같은 기간'];
+  }
+  // 기간 합계용 집계 (비교 기간 계산에 사용)
+  function agg(f, t, reg, SP) {
+    const z = () => new Array(NR).fill(0), O = { tot: z(), cTot: z(), dTot: z(), imp: z(), clk: z(), conv: z() }, A = D.A;
+    for (let i = 0; i < D.n; i++) {
+      const d = A.day[i]; if (d < f || d > t) continue;
+      const c = A.src[i]; if (!inScope(c)) continue;
+      if (S.dedupe && A.dup[i]) continue;
+      O.tot[reg[i]]++;
+      if (SP && SP.chs.has(c)) O.dTot[SP.nat.has(c) ? NATION : reg[i]]++;
+    }
+    if (SP) SP.rows.forEach(r => { if (r[0] < f || r[0] > t || !inScope(r[1])) return; O.cTot[r[2]] += r[3]; O.imp[r[2]] += r[5]; O.clk[r[2]] += r[6]; O.conv[r[2]] += r[7]; });
+    return O;
+  }
+  const sumA = a => a.reduce((x, y) => x + y, 0);
+  const MET = {
+    n: (O, j) => j < 0 ? sumA(O.tot) : O.tot[j],
+    cost: (O, j) => j < 0 ? sumA(O.cTot) : O.cTot[j],
+    cpa: (O, j) => { const c = j < 0 ? sumA(O.cTot) : O.cTot[j], d = j < 0 ? sumA(O.dTot) : O.dTot[j]; return c && d ? c / d : null; },
+    imp: (O, j) => j < 0 ? sumA(O.imp) : O.imp[j],
+    clk: (O, j) => j < 0 ? sumA(O.clk) : O.clk[j],
+    ctr: (O, j) => { const i = j < 0 ? sumA(O.imp) : O.imp[j]; return i ? (j < 0 ? sumA(O.clk) : O.clk[j]) / i * 100 : null; },
+    cvr: (O, j) => { const k = j < 0 ? sumA(O.clk) : O.clk[j]; return k ? (j < 0 ? sumA(O.conv) : O.conv[j]) / k * 100 : null; }
+  };
+  const GOOD = { n: 1, cost: 0, cpa: -1, imp: 1, clk: 1, ctr: 1, cvr: 1 };   // 1 = 늘면 좋음, -1 = 줄면 좋음, 0 = 색 없음
+  // 비교 칸: 비교 기간 값 + 증감 (비율 지표는 %p)
+  function cmpHtml(V, K, k, j) {
+    if (!K) return '';
+    const a = MET[k](V, j), b = MET[k](K, j), rate = k === 'ctr' || k === 'cvr';
+    const show = v => k === 'cost' || k === 'imp' ? man(v) : rate ? v.toFixed(2) + '%' : fmt(v);
+    if (!a && !b) return '';   // 두 기간 모두 0·없음이면 표시 안 함
+    if (b == null) return '<span class="rg-cmp">비교 -</span>';
+    if (a == null) return `<span class="rg-cmp">${show(b)}</span>`;
+    const diff = a - b, dir = Math.abs(diff) < 1e-9 ? 0 : Math.sign(diff);
+    const txt = rate ? (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%p' : b ? (diff >= 0 ? '+' : '') + (diff / b * 100).toFixed(1) + '%' : (a ? '신규' : '0%');
+    const cls = !dir || !GOOD[k] ? '' : dir * GOOD[k] > 0 ? 'good' : 'bad';
+    return `<span class="rg-cmp">${show(b)} <b class="${cls}">${dir > 0 ? '▲' : dir < 0 ? '▼' : ''}${txt}</b></span>`;
+  }
+
+  // 변경이력 (구글 애즈 → '변경이력_채널' 탭)
+  const CHG_MAIN = /^(캠페인|예산|광고그룹|입찰 조정)$/;
+  function chgList(f, t) {
+    const C = (D.chg && D.chg.rows) || [];
+    const chs = D.names.filter((n, c) => inScope(c) && C.some(r => r[2] === n));
+    return { chs: chs, list: C.filter(r => r[0] >= f && r[0] <= t && chs.indexOf(r[2]) >= 0 && (st.chgType === 'all' || CHG_MAIN.test(r[5]))) };
+  }
+  function renderChg(from, to, cmp) {
+    const side = $('rgSide');
+    $('rgMain').classList.toggle('side', st.chg); side.hidden = !st.chg;
+    if (!st.chg) return;
+    if (!D.chg || !D.chg.rows || !D.chg.rows.length) { side.innerHTML = '<div class="rg-side-h"><b>변경이력</b></div><p class="m">아직 변경이력이 없어요. 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 매시간 쌓여요.</p>'; return; }
+    const f0 = cmp ? Math.min(from, cmp[0]) : from, t0 = cmp ? Math.max(to, cmp[1]) : to;
+    const { chs, list } = chgList(f0, t0);
+    if (!chs.length) { side.innerHTML = '<div class="rg-side-h"><b>변경이력</b></div><p class="m">채널에서 구글 계정(G·H·D·B·U)을 고르면 그 계정의 변경이력이 보여요. 전체·주력군을 고르면 해당 구글 계정이 모두 나와요.</p>'; return; }
+    const multi = chs.length > 1, opc = { '추가': 'add', '변경': 'upd', '삭제': 'del' }, byDay = new Map();
+    list.forEach(r => { if (!byDay.has(r[0])) byDay.set(r[0], []); byDay.get(r[0]).push(r); });
+    const days = [...byDay.keys()].sort((a, b) => b - a);
+    let shown = 0, html = '';
+    for (const d of days) {
+      if (shown >= 300) break;
+      const items = byDay.get(d), inCmp = cmp && d >= cmp[0] && d <= cmp[1] && !(d >= from && d <= to);
+      html += `<div class="rg-chg-day${inCmp ? ' cmp' : ''}">${md(d)}<span class="m">${items.length}건${inCmp ? ' · 비교 기간' : ''}</span></div><ul class="rg-chg">`;
+      items.slice(0, 300 - shown).forEach(r => {
+        const reg = classify(r[3]);
+        html += `<li><div class="rg-chg-top"><span class="t">${esc(r[1])}</span><span class="op op-${opc[r[6]] || 'upd'}">${esc(r[6])}</span><b>${esc(r[5])}</b>${multi ? `<span class="ch">${esc(r[2])}</span>` : ''}</div>` +
+          (r[3] ? `<div class="nm"><i style="background:${COLORS[reg]}" title="${REGIONS[reg]}"></i>${esc(r[3])}${r[4] ? ' <span class="m">› ' + esc(r[4]) + '</span>' : ''}</div>` : '') +
+          (r[7] ? `<div class="dt">${esc(r[7])}</div>` : '') +
+          `<div class="by">${esc(r[8] || '-')} · ${esc(r[9] || '')}</div></li>`;
+      });
+      shown += items.length; html += '</ul>';
+    }
+    side.innerHTML = `<div class="rg-side-h"><b>변경이력</b><span class="m">${esc(chs.join('·'))} · ${md(f0)}${f0 !== t0 ? ' ~ ' + md(t0) : ''} · ${fmt(list.length)}건</span></div>` +
+      `<div class="seg rg-chg-f"><button data-chg="all" aria-pressed="${st.chgType === 'all'}">전체</button><button data-chg="main" aria-pressed="${st.chgType === 'main'}">캠페인·예산·광고그룹</button></div>` +
+      (html || '<p class="m">이 기간에 변경 내역이 없어요.</p>') + (list.length > 300 ? `<p class="m">최근 300건만 보여요 (전체 ${fmt(list.length)}건).</p>` : '') +
+      '<p class="m rg-chg-foot">구글 애즈 「변경 내역」 기준 · 매시간 갱신 · 구글은 최근 30일까지만 제공해서, 스크립트를 넣은 날의 29일 전부터 쌓여요.</p>';
+  }
+
   function render() {
     const box = $('rgTable');
     if (!box || typeof D === 'undefined' || !D) return;
@@ -144,6 +230,10 @@
     const cTot = new Array(NR).fill(0), dTot = new Array(NR).fill(0);
     cost.forEach(r => r.forEach((v, j) => { cTot[j] += v; })); cdb.forEach(r => r.forEach((v, j) => { dTot[j] += v; }));
     const cAll = cTot.reduce((a, b) => a + b, 0), dAll = dTot.reduce((a, b) => a + b, 0);
+    const CR = st.cmp ? cmpRange(from, to) : null;
+    const V = { tot: tot, cTot: cTot, dTot: dTot, imp: imp, clk: clk, conv: conv }, K = CR ? agg(CR[0], CR[1], reg, SP) : null;
+    const chgDay = new Map();
+    if (st.chg) chgList(from, to).list.forEach(r => chgDay.set(r[0], (chgDay.get(r[0]) || 0) + 1));
     const cpa = (c, n) => c && n ? fmt(c / n) : (c ? '<span class="m">DB 0</span>' : '<span class="m">-</span>');
     const money = st.unit === 'cost' || st.unit === 'cpa';
     if (money && !SP) st.unit = 'n';
@@ -156,6 +246,7 @@
       ? `${from === to ? md(from) : md(from) + ' ~ ' + md(to)} <b>${fmt(all)}건</b> 중 <b>${top[0][0]} ${fmt(top[0][1])}건(${pct(top[0][1], all)})</b>이 가장 많고, ${top[1][0]} ${pct(top[1][1], all)}, ${top[2][0]} ${pct(top[2][1], all)} 순이에요.` +
         (tot[ETC] ? ` 지역을 알 수 없는 DB는 <b>${fmt(tot[ETC])}건(${pct(tot[ETC], all)})</b>으로 '기타'에 넣었어요.` : '')
       : '선택한 기간·채널에 DB가 없어요.';
+    if (CR) { const kb = sumA(K.tot); $('rgLead').innerHTML += ` <span class="rg-cmp-lead">${CR[2]}(${CR[0] === CR[1] ? md(CR[0]) : md(CR[0]) + ' ~ ' + md(CR[1])}) ${fmt(kb)}건 대비 ${cmpHtml(V, K, 'n', -1).replace(/^<span class="rg-cmp">[^<]*/, '').replace(/<\/span>$/, '')}</span>`; }
 
     // 막대 (기간 비중)
     $('rgBar').innerHTML = all ? REGIONS.map((r, j) => tot[j] ? `<i style="width:${tot[j] / all * 100}%;background:${COLORS[j]}" title="${r} ${fmt(tot[j])}건 (${pct(tot[j], all)})"></i>` : '').join('') : '';
@@ -163,25 +254,25 @@
 
     // 일자 × 지역
     const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>`).join('') + '<th>합계</th></tr></thead>';
-    let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map(v => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span></td>`).join('') + `<td>${fmt(all)}</td></tr>`;
+    let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map((v, j) => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span>${cmpHtml(V, K, 'n', j)}</td>`).join('') + `<td>${fmt(all)}${cmpHtml(V, K, 'n', -1)}</td></tr>`;
     if (SP) {
-      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">광고비 있는 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span></td></tr>`;
-      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·메타·VAT포함</span></td>' + cTot.map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td>${man(cAll)}</td></tr>`;
+      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">광고비 있는 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span>${cmpHtml(V, K, 'cpa', j)}</td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span>${cmpHtml(V, K, 'cpa', -1)}</td></tr>`;
+      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·메타·VAT포함</span></td>' + cTot.map((v, j) => `<td>${v ? man(v) : '<span class="m">-</span>'}${cmpHtml(V, K, 'cost', j)}</td>`).join('') + `<td>${man(cAll)}${cmpHtml(V, K, 'cost', -1)}</td></tr>`;
       const sum = a => a.reduce((x, y) => x + y, 0), iA = sum(imp), kA = sum(clk), vA = sum(conv);
       if (iA) {
         const dash = '<span class="m">-</span>', rate = (a, b) => b ? (a / b * 100).toFixed(2) + '%' : dash;
         const cnt = v => Math.round(v * 10) / 10;
-        body += '<tr class="rg-sum rg-ads"><td>노출수 <span class="m">구글</span></td>' + imp.map(v => `<td>${v ? man(v) : dash}</td>`).join('') + `<td>${man(iA)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>클릭수 <span class="m">구글</span></td>' + clk.map(v => `<td>${v ? fmt(v) : dash}</td>`).join('') + `<td>${fmt(kA)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>클릭률 <span class="m">클릭÷노출</span></td>' + clk.map((v, j) => `<td>${rate(v, imp[j])}</td>`).join('') + `<td>${rate(kA, iA)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>전환율 <span class="m">구글 전환÷클릭</span></td>' + conv.map((v, j) => `<td>${rate(v, clk[j])}<span class="m">${v ? fmt(cnt(v)) + '건' : ''}</span></td>`).join('') + `<td>${rate(vA, kA)}<span class="m">${fmt(cnt(vA))}건</span></td></tr>`;
+        body += '<tr class="rg-sum rg-ads"><td>노출수 <span class="m">구글</span></td>' + imp.map((v, j) => `<td>${v ? man(v) : dash}${cmpHtml(V, K, 'imp', j)}</td>`).join('') + `<td>${man(iA)}${cmpHtml(V, K, 'imp', -1)}</td></tr>`;
+        body += '<tr class="rg-sum rg-ads"><td>클릭수 <span class="m">구글</span></td>' + clk.map((v, j) => `<td>${v ? fmt(v) : dash}${cmpHtml(V, K, 'clk', j)}</td>`).join('') + `<td>${fmt(kA)}${cmpHtml(V, K, 'clk', -1)}</td></tr>`;
+        body += '<tr class="rg-sum rg-ads"><td>클릭률 <span class="m">클릭÷노출</span></td>' + clk.map((v, j) => `<td>${rate(v, imp[j])}${cmpHtml(V, K, 'ctr', j)}</td>`).join('') + `<td>${rate(kA, iA)}${cmpHtml(V, K, 'ctr', -1)}</td></tr>`;
+        body += '<tr class="rg-sum rg-ads"><td>전환율 <span class="m">구글 전환÷클릭</span></td>' + conv.map((v, j) => `<td>${rate(v, clk[j])}<span class="m">${v ? fmt(cnt(v)) + '건' : ''}</span>${cmpHtml(V, K, 'cvr', j)}</td>`).join('') + `<td>${rate(vA, kA)}<span class="m">${fmt(cnt(vA))}건</span>${cmpHtml(V, K, 'cvr', -1)}</td></tr>`;
       }
     }
     if (nd > 1) body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
     for (let k = nd - 1; k >= 0; k--) {
       const r = day[k], s = r.reduce((a, b) => a + b, 0), d = from + k;
       const wk = new Date(d * 864e5).getUTCDay();
-      body += `<tr${wk === 0 || wk === 6 ? ' class="rg-we"' : ''}><td>${md(d)}${d === (D.asOf && D.asOf.day) ? ' <span class="m">진행 중</span>' : ''}</td>` +
+      body += `<tr${wk === 0 || wk === 6 ? ' class="rg-we"' : ''}><td>${md(d)}${d === (D.asOf && D.asOf.day) ? ' <span class="m">진행 중</span>' : ''}${chgDay.get(d) ? ` <span class="rg-chgmark" title="구글 애즈 변경 ${chgDay.get(d)}건">변경 ${chgDay.get(d)}</span>` : ''}</td>` +
         (st.unit === 'cost' ? cost[k].map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${man(cost[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
         : st.unit === 'cpa' ? cost[k].map((v, j) => { const x = v && cdb[k][j] ? v / cdb[k][j] : 0, base = dTot[j] ? cTot[j] / dTot[j] : 0; const cls = x && base && cdb[k][j] >= 3 && Math.abs(x / base - 1) >= 0.25 ? (x < base ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${cpa(v, cdb[k][j])}</td>`; }).join('') + `<td><b>${cpa(cost[k].reduce((a, b) => a + b, 0), cdb[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
         : r.map((v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }).join('') +
@@ -208,6 +299,12 @@
       if (!$('rgEtc').querySelector('summary')) $('rgEtc').insertAdjacentHTML('afterbegin', '<summary>세부정보</summary>');
     }
     $('rgSpNote').textContent = SP ? '광고비·CPA: 구글 애즈 캠페인 이름의 지역 글자로 나눈 금액(부가세 포함) ÷ 같은 지역 DB (' + [...SP.chs].filter(c => !SP.nat.has(c)).map(c => D.names[c]).join('·') + ')' + (SP.nat.size ? ' · 메타(' + [...SP.nat].map(c => D.names[c]).join('·') + ')는 광고비·DB 모두 전국으로 계산' : '') + ' · 광고비 ' + md(SP.last) + '까지 · 노출·클릭·전환은 구글 애즈 값(전환은 구글 애즈 전환 기준)' : '광고비·CPA는 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 나와요.';
+    $('rgCmpOn').checked = st.cmp; $('rgChgOn').checked = st.chg; $('rgCmpRow').hidden = !st.cmp;
+    if (CR) { $('rgKFrom').value = iso(CR[0]); $('rgKTo').value = iso(CR[1]); $('rgKFrom').max = $('rgKTo').max = iso(todayDay());
+      $('rgKLab').textContent = (CR[1] - CR[0] + 1) + '일 · ' + CR[2]; $('rgKAuto').hidden = st.kFrom == null; }
+    $('rgCmpNote').hidden = !CR;
+    if (CR) $('rgCmpNote').innerHTML = `각 칸 아래 작은 글씨는 <b>비교 기간(${CR[2]} ${md(CR[0])}${CR[0] !== CR[1] ? ' ~ ' + md(CR[1]) : ''})</b> 값과 증감이에요. <span class="good">파란색</span>은 좋아짐, <span class="bad">빨간색</span>은 나빠짐 (CPA는 낮아지면 좋음, 광고비는 색 없음, 클릭률·전환율은 %p 차이).`;
+    renderChg(from, to, CR);
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
 
@@ -223,6 +320,8 @@
       if (st.end != null && st.end >= todayDay()) st.end = null;
       render(); return;
     }
+    if (e.target.id === 'rgKAuto') { st.kFrom = st.kTo = null; render(); return; }
+    const cf = e.target.closest('#rgSide [data-chg]'); if (cf) { st.chgType = cf.dataset.chg; render(); return; }
     const b = e.target.closest('#rgCtrl [data-k]'); if (!b) return;
     if (b.dataset.v === 'custom' && st.period !== 'custom') { const [f, t] = range(); st.cFrom = f; st.cTo = t; }
     if (b.dataset.k === 'period' && b.dataset.v !== 'custom' && st.period === 'custom') { const t = range()[1]; st.end = t >= todayDay() ? null : t; }   // 직접 지정 → 다른 기간: 끝 날짜를 기준일로 유지
@@ -234,6 +333,13 @@
       st.cFrom = e.target.id === 'rgFrom' ? d : f; st.cTo = e.target.id === 'rgTo' ? d : t;
       if (st.cFrom > st.cTo) { const z = st.cFrom; st.cFrom = st.cTo; st.cTo = z; }
       st.period = 'custom'; render(); return;
+    }
+    if (e.target.id === 'rgCmpOn') { st.cmp = e.target.checked; render(); return; }
+    if (e.target.id === 'rgChgOn') { st.chg = e.target.checked; render(); return; }
+    if ((e.target.id === 'rgKFrom' || e.target.id === 'rgKTo') && e.target.value) {
+      const [f, t] = range(), c0 = cmpRange(f, t), x = e.target.value.split('-'), d = Math.floor(Date.UTC(+x[0], +x[1] - 1, +x[2]) / 864e5);
+      st.kFrom = e.target.id === 'rgKFrom' ? d : c0[0]; st.kTo = e.target.id === 'rgKTo' ? d : c0[1];
+      render(); return;
     }
     if (e.target.id !== 'rgDate' || !e.target.value) return;
     const v = e.target.value.split('-');
