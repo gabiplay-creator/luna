@@ -564,3 +564,26 @@ table.daily { border-collapse: separate; border-spacing: 0; min-width: 100%; fon
 .rg-chg .dt { margin-top: 2px; color: var(--ink); word-break: break-all; }
 .rg-chg .by { margin-top: 2px; color: var(--muted); font-size: 11px; }
 .rg-chg-foot { margin-top: 10px; }
+/* 변경이력 v2: 대상 칩 · 묶음 카드 */
+.rg-chg-f { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.rg-chg-f button { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.rg-chg-f button span { opacity: .7; margin-left: 2px; }
+.rg-chg-f button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.rg-chg li { border-bottom: 0; border-left: 3px solid #A9BDEE; padding: 7px 0 7px 10px; margin: 6px 0; background: var(--soft); border-radius: 0 6px 6px 0; }
+.rg-chg li.op-add { border-left-color: #3BAA7E; } .rg-chg li.op-del { border-left-color: #D9534F; }
+.rg-chg-top { gap: 6px; }
+.rg-chg-top b { font-size: 13px; }
+.rg-chg .cnt { font-size: 11px; background: var(--ink); color: var(--panel); border-radius: 999px; padding: 0 6px; }
+.rg-chg-top .by { margin: 0 6px 0 auto; font-size: 11px; color: var(--muted); }
+.rg-chg .nm { margin-top: 4px; font-size: 12.5px; line-height: 1.4; }
+.rg-chg .nm .ag { color: var(--muted); }
+.rg-chg .nm.more { color: var(--muted); padding-left: 13px; }
+.rg-chg .dt { margin-top: 3px; font-size: 12.5px; padding-left: 13px; }
+.rg-chg .dt b { color: var(--muted); font-weight: 500; margin-right: 2px; }
+.rg-chg .nm, .rg-chg-top b { color: var(--ink); }
+/* 비교: 지역 옆 칸 */
+.rg-tbl th.rg-kc { color: var(--muted); font-weight: 400; font-size: 11px; }
+.rg-tbl td.rg-kc, .rg-tbl th.rg-kc { background: var(--soft); border-left: 1px dashed var(--line); padding-left: 6px; padding-right: 10px; }
+.rg-tbl tr.rg-money td.rg-kc, .rg-tbl tr.rg-ads td.rg-kc, .rg-tbl tr.rg-sum td.rg-kc { background: #EAEFF6; }
+.rg-kc .rg-cmp { margin-top: 0; font-size: 12px; color: var(--muted); }
+.rg-kc .rg-cmp b { display: block; font-size: 11.5px; margin: 1px 0 0; }

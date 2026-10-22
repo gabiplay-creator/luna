@@ -127,7 +127,7 @@
     const a = MET[k](V, j), b = MET[k](K, j), rate = k === 'ctr' || k === 'cvr';
     const show = v => k === 'cost' || k === 'imp' ? man(v) : rate ? v.toFixed(2) + '%' : fmt(v);
     if (!a && !b) return '';   // 두 기간 모두 0·없음이면 표시 안 함
-    if (b == null) return '<span class="rg-cmp">비교 -</span>';
+    if (b == null) return '<span class="rg-cmp">-</span>';
     if (a == null) return `<span class="rg-cmp">${show(b)}</span>`;
     const diff = a - b, dir = Math.abs(diff) < 1e-9 ? 0 : Math.sign(diff);
     const txt = rate ? (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%p' : b ? (diff >= 0 ? '+' : '') + (diff / b * 100).toFixed(1) + '%' : (a ? '신규' : '0%');
@@ -137,10 +137,54 @@
 
   // 변경이력 (구글 애즈 → '변경이력_채널' 탭)
   const CHG_MAIN = /^(캠페인|예산|광고그룹|입찰 조정)$/;
+  const FIELD_KO = { businessName: '업체명', callToActions: '행동 유도', descriptions: '설명', headlines: '제목', longHeadlines: '긴 제목',
+    longHeadline: '긴 제목', logoImages: '로고', marketingImages: '이미지', squareMarketingImages: '정사각형 이미지', portraitMarketingImages: '세로 이미지',
+    videos: '동영상', finalUrls: '최종 URL', finalMobileUrls: '모바일 URL', trackingUrlTemplate: '추적 URL', name: '이름', status: '상태',
+    amountMicros: '예산', targetCpaMicros: '타겟 CPA', targetRoas: '타겟 ROAS', cpcBidMicros: 'CPC 입찰', bidModifier: '입찰 조정',
+    startDate: '시작일', endDate: '종료일', path1: '표시 경로1', path2: '표시 경로2', breadcrumb1: '표시 경로1', breadcrumb2: '표시 경로2',
+    displayUrl: '표시 URL', text: '텍스트', negative: '제외', geoTargetConstant: '지역', userList: '잠재고객', userInterestCategory: '관심사',
+    adSchedule: '광고 일정', biddingStrategyType: '입찰 전략', urlCustomParameters: '맞춤 매개변수', finalUrlSuffix: 'URL 접미사', positiveGeoTargetType: '위치 옵션(포함)', negativeGeoTargetType: '위치 옵션(제외)' };
+  const VALUE_KO = { PRESENCE_OR_INTEREST: '실재 또는 관심(관심 보인 사람 포함)', PRESENCE: '실재(지역에 있거나 자주 방문)', SEARCH_INTEREST: '검색 관심', ENABLED: '사용', PAUSED: '일시중지', REMOVED: '삭제' };
+  // 'demandGenVideoResponsiveAd.callToActions: […] → […]' 같은 원문을 [{label, text}]로 정리
+  function prettyDetail(str) {
+    if (!str) return [];
+    let more = ''; str = String(str).replace(/ 외 (\d+)개$/, (m, n) => { more = n; return ''; });
+    const out = [];
+    str.split(' · ').forEach(part => {
+      const m = part.match(/^([A-Za-z0-9_.]+|[^:]{1,20}): ([\s\S]*)$/);
+      if (!m) { if (part.trim()) out.push({ label: '', text: part.trim() }); return; }
+      const segs = m[1].split('.').filter(x => x !== 'text' && x !== 'assets' && x !== 'asset');
+      const key = segs[segs.length - 1] || m[1], label = FIELD_KO[key] || key;
+      let v = m[2];
+      const arrow = v.indexOf(' → ');
+      if (arrow >= 0) {
+        const a = v.slice(0, arrow).trim(), b = v.slice(arrow + 3).trim();
+        if (a === b && !/…$/.test(a)) return;                                  // 바뀐 게 없으면 빼기 (없음 → 없음)
+        const blob = x => /^[\[{]/.test(x);
+        v = blob(a) || blob(b) ? (a === '없음' ? '추가' : b === '없음' ? '삭제' : '수정') : (VALUE_KO[a] || a) + ' → ' + (VALUE_KO[b] || b);
+      } else if (/^[\[{]/.test(v)) v = '설정';
+      out.push({ label: label, text: v });
+    });
+    if (more) out.push({ label: '', text: '외 ' + more + '개 항목' });
+    return out;
+  }
   function chgList(f, t) {
     const C = (D.chg && D.chg.rows) || [];
     const chs = D.names.filter((n, c) => inScope(c) && C.some(r => r[2] === n));
-    return { chs: chs, list: C.filter(r => r[0] >= f && r[0] <= t && chs.indexOf(r[2]) >= 0 && (st.chgType === 'all' || CHG_MAIN.test(r[5]))) };
+    const all = C.filter(r => r[0] >= f && r[0] <= t && chs.indexOf(r[2]) >= 0);
+    return { chs: chs, all: all, list: all.filter(r => st.chgType === 'all' || (st.chgType === 'main' ? CHG_MAIN.test(r[5]) : r[5] === st.chgType)) };
+  }
+  // 같은 날 · 같은 사람 · 같은 대상/작업 · 같은 변경 항목 · 15분 안 → 한 카드로 묶기
+  function groupChg(items) {
+    const toMin = h => { const p = String(h).split(':'); return +p[0] * 60 + +p[1]; };
+    const out = [];
+    items.forEach(r => {
+      const det = prettyDetail(r[7]), sig = [r[2], r[5], r[6], r[8], r[9], det.map(x => x.label).join(',')].join('|'), mm = toMin(r[1]);
+      const g = out.find(x => x.sig === sig && Math.abs(x.min - mm) <= 15);
+      if (g) { g.rows.push(r); g.dets.push(det); g.first = r[1]; }
+      else out.push({ sig: sig, min: mm, last: r[1], first: r[1], rows: [r], dets: [det] });
+    });
+    return out;
   }
   function renderChg(from, to, cmp) {
     const side = $('rgSide');
@@ -148,29 +192,48 @@
     if (!st.chg) return;
     if (!D.chg || !D.chg.rows || !D.chg.rows.length) { side.innerHTML = '<div class="rg-side-h"><b>변경이력</b></div><p class="m">아직 변경이력이 없어요. 구글 애즈 「광고비 기록」 스크립트를 새 버전으로 바꾸면 매시간 쌓여요.</p>'; return; }
     const f0 = cmp ? Math.min(from, cmp[0]) : from, t0 = cmp ? Math.max(to, cmp[1]) : to;
-    const { chs, list } = chgList(f0, t0);
+    const { chs, all, list } = chgList(f0, t0);
     if (!chs.length) { side.innerHTML = '<div class="rg-side-h"><b>변경이력</b></div><p class="m">채널에서 구글 계정(G·H·D·B·U)을 고르면 그 계정의 변경이력이 보여요. 전체·주력군을 고르면 해당 구글 계정이 모두 나와요.</p>'; return; }
+    // 대상별 건수 칩 (필터)
+    const tc = new Map(); all.forEach(r => tc.set(r[5], (tc.get(r[5]) || 0) + 1));
+    const order = ['캠페인', '예산', '광고그룹', '입찰 조정', '광고', '캠페인 타겟', '광고그룹 타겟'];
+    const types = [...tc.keys()].sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99) || tc.get(b) - tc.get(a));
+    const chip = (v, label, n) => `<button data-chg="${esc(v)}" aria-pressed="${st.chgType === v}">${esc(label)}${n != null ? ' <span>' + fmt(n) + '</span>' : ''}</button>`;
+    const nMain = all.filter(r => CHG_MAIN.test(r[5])).length;
+    const chips = chip('all', '전체', all.length) + (nMain && nMain < all.length ? chip('main', '주요', nMain) : '') + types.map(t => chip(t, t, tc.get(t))).join('');
+
     const multi = chs.length > 1, opc = { '추가': 'add', '변경': 'upd', '삭제': 'del' }, byDay = new Map();
     list.forEach(r => { if (!byDay.has(r[0])) byDay.set(r[0], []); byDay.get(r[0]).push(r); });
     const days = [...byDay.keys()].sort((a, b) => b - a);
-    let shown = 0, html = '';
+    let cards = 0, html = '';
     for (const d of days) {
-      if (shown >= 300) break;
-      const items = byDay.get(d), inCmp = cmp && d >= cmp[0] && d <= cmp[1] && !(d >= from && d <= to);
-      html += `<div class="rg-chg-day${inCmp ? ' cmp' : ''}">${md(d)}<span class="m">${items.length}건${inCmp ? ' · 비교 기간' : ''}</span></div><ul class="rg-chg">`;
-      items.slice(0, 300 - shown).forEach(r => {
-        const reg = classify(r[3]);
-        html += `<li><div class="rg-chg-top"><span class="t">${esc(r[1])}</span><span class="op op-${opc[r[6]] || 'upd'}">${esc(r[6])}</span><b>${esc(r[5])}</b>${multi ? `<span class="ch">${esc(r[2])}</span>` : ''}</div>` +
-          (r[3] ? `<div class="nm"><i style="background:${COLORS[reg]}" title="${REGIONS[reg]}"></i>${esc(r[3])}${r[4] ? ' <span class="m">› ' + esc(r[4]) + '</span>' : ''}</div>` : '') +
-          (r[7] ? `<div class="dt">${esc(r[7])}</div>` : '') +
-          `<div class="by">${esc(r[8] || '-')} · ${esc(r[9] || '')}</div></li>`;
+      if (cards >= 150) break;
+      const groups = groupChg(byDay.get(d)), inCmp = cmp && d >= cmp[0] && d <= cmp[1] && !(d >= from && d <= to);
+      html += `<div class="rg-chg-day${inCmp ? ' cmp' : ''}">${md(d)}<span class="m">${byDay.get(d).length}건${inCmp ? ' · 비교 기간' : ''}</span></div><ul class="rg-chg">`;
+      groups.slice(0, 150 - cards).forEach(g => {
+        const r = g.rows[0], n = g.rows.length, det = g.dets[0];
+        const sameDet = g.dets.every(x => JSON.stringify(x) === JSON.stringify(det));
+        const camps = [...new Map(g.rows.map(x => [x[3] + '\u0001' + x[4], x])).values()];
+        const campHtml = camps.slice(0, 4).map(x => { const rg = classify(x[3]); return `<div class="nm"><i style="background:${COLORS[rg]}" title="${REGIONS[rg]}"></i>${esc(x[3] || '(계정 전체)')}${x[4] ? '<span class="ag"> › ' + esc(x[4]) + '</span>' : ''}</div>`; }).join('') +
+          (camps.length > 4 ? `<div class="nm more">외 ${camps.length - 4}곳</div>` : '');
+        const dl = ds => ds.map(x => `<div class="dt">${x.label ? '<b>' + esc(x.label) + '</b> ' : ''}${esc(x.text)}</div>`).join('');
+        let body;
+        if (sameDet) body = campHtml + dl(det);
+        else {   // 캠페인마다 바뀐 값이 다르면 (예: 예산) 캠페인별로 값까지 보여주기
+          body = g.rows.slice(0, 6).map((x, i) => { const rg = classify(x[3]); return `<div class="nm"><i style="background:${COLORS[rg]}" title="${REGIONS[rg]}"></i>${esc(x[3] || '(계정 전체)')}${x[4] ? '<span class="ag"> › ' + esc(x[4]) + '</span>' : ''}</div>` + dl(g.dets[i]); }).join('') +
+            (n > 6 ? `<div class="nm more">외 ${n - 6}건</div>` : '');
+        }
+        html += `<li class="op-${opc[r[6]] || 'upd'}"><div class="rg-chg-top"><span class="t">${esc(g.first !== g.last ? g.first + '~' + g.last : r[1])}</span>` +
+          `<b>${esc(r[5])} ${esc(r[6])}</b>${n > 1 ? `<span class="cnt">${n}건</span>` : ''}${multi ? `<span class="ch">${esc(r[2])}</span>` : ''}<span class="by">${esc(r[8] || '-')} · ${esc(r[9] || '')}</span></div>` +
+          body + '</li>';
+        cards++;
       });
-      shown += items.length; html += '</ul>';
+      html += '</ul>';
     }
-    side.innerHTML = `<div class="rg-side-h"><b>변경이력</b><span class="m">${esc(chs.join('·'))} · ${md(f0)}${f0 !== t0 ? ' ~ ' + md(t0) : ''} · ${fmt(list.length)}건</span></div>` +
-      `<div class="seg rg-chg-f"><button data-chg="all" aria-pressed="${st.chgType === 'all'}">전체</button><button data-chg="main" aria-pressed="${st.chgType === 'main'}">캠페인·예산·광고그룹</button></div>` +
-      (html || '<p class="m">이 기간에 변경 내역이 없어요.</p>') + (list.length > 300 ? `<p class="m">최근 300건만 보여요 (전체 ${fmt(list.length)}건).</p>` : '') +
-      '<p class="m rg-chg-foot">구글 애즈 「변경 내역」 기준 · 매시간 갱신 · 구글은 최근 30일까지만 제공해서, 스크립트를 넣은 날의 29일 전부터 쌓여요.</p>';
+    side.innerHTML = `<div class="rg-side-h"><b>변경이력</b><span class="m">${esc(chs.join('·'))} · ${md(f0)}${f0 !== t0 ? ' ~ ' + md(t0) : ''} · ${fmt(all.length)}건</span></div>` +
+      `<div class="rg-chg-f">${chips}</div>` +
+      (html || '<p class="m">이 기간에 해당 변경이 없어요.</p>') + (cards >= 150 ? '<p class="m">최근 150묶음까지만 보여요. 기간을 줄이거나 위에서 대상을 골라 보세요.</p>' : '') +
+      '<p class="m rg-chg-foot">구글 애즈 「변경 내역」 기준 · 매시간 갱신 · 같은 사람이 15분 안에 같은 항목을 바꾼 건 한 줄로 묶었어요. 구글은 최근 30일까지만 제공해요.</p>';
   }
 
   function render() {
@@ -252,31 +315,62 @@
     $('rgBar').innerHTML = all ? REGIONS.map((r, j) => tot[j] ? `<i style="width:${tot[j] / all * 100}%;background:${COLORS[j]}" title="${r} ${fmt(tot[j])}건 (${pct(tot[j], all)})"></i>` : '').join('') : '';
     $('rgLegend').innerHTML = REGIONS.map((r, j) => `<span><i style="background:${COLORS[j]}"></i>${r} <b>${pct(tot[j], all)}</b></span>`).join('');
 
-    // 일자 × 지역
-    const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>`).join('') + '<th>합계</th></tr></thead>';
-    let body = '<tr class="rg-sum"><td>기간 합계</td>' + tot.map((v, j) => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span>${cmpHtml(V, K, 'n', j)}</td>`).join('') + `<td>${fmt(all)}${cmpHtml(V, K, 'n', -1)}</td></tr>`;
+    // 일자 × 지역  (비교를 켜면 지역마다 바로 옆에 '비교' 칸)
+    const vis = REGIONS.map((_, j) => !K || !!(tot[j] || K.tot[j] || cTot[j] || K.cTot[j]));   // 비교 때는 두 기간 모두 빈 지역 숨김
+    const VM = (arr, fn) => arr.map((v, j) => vis[j] ? fn(v, j) + (K ? kc(j) : '') : '').join('');
+    let kc = () => '';   // 행마다 바꿔 끼우는 비교 칸
+    const kcell = (k, j) => `<td class="rg-kc">${cmpHtml(V, K, k, j)}</td>`;
+    const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => vis[j] ? `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>` + (K ? '<th class="rg-kc">비교</th>' : '') : '').join('') + '<th>합계</th>' + (K ? '<th class="rg-kc">비교</th>' : '') + '</tr></thead>';
+    const row = (cls, label, arr, fn, k, totHtml) => { kc = j => kcell(k, j); return `<tr class="${cls}"><td>${label}</td>` + VM(arr, fn) + `<td>${totHtml}</td>` + (K ? kcell(k, -1) : '') + '</tr>'; };
+    let body = row('rg-sum', '기간 합계', tot, (v, j) => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span></td>`, 'n', fmt(all));
     if (SP) {
-      body += '<tr class="rg-sum rg-money"><td>CPA <span class="m">광고비 있는 채널 DB 기준</span></td>' + cTot.map((v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span>${cmpHtml(V, K, 'cpa', j)}</td>`).join('') + `<td>${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span>${cmpHtml(V, K, 'cpa', -1)}</td></tr>`;
-      body += '<tr class="rg-sum rg-money"><td>광고비 <span class="m">구글·메타·VAT포함</span></td>' + cTot.map((v, j) => `<td>${v ? man(v) : '<span class="m">-</span>'}${cmpHtml(V, K, 'cost', j)}</td>`).join('') + `<td>${man(cAll)}${cmpHtml(V, K, 'cost', -1)}</td></tr>`;
-      const sum = a => a.reduce((x, y) => x + y, 0), iA = sum(imp), kA = sum(clk), vA = sum(conv);
+      body += row('rg-sum rg-money', 'CPA <span class="m">광고비 있는 채널 DB 기준</span>', cTot, (v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`, 'cpa', `${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span>`);
+      body += row('rg-sum rg-money', '광고비 <span class="m">구글·메타·VAT포함</span>', cTot, v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`, 'cost', man(cAll));
+      const iA = sumA(imp), kA = sumA(clk), vA = sumA(conv);
       if (iA) {
-        const dash = '<span class="m">-</span>', rate = (a, b) => b ? (a / b * 100).toFixed(2) + '%' : dash;
-        const cnt = v => Math.round(v * 10) / 10;
-        body += '<tr class="rg-sum rg-ads"><td>노출수 <span class="m">구글</span></td>' + imp.map((v, j) => `<td>${v ? man(v) : dash}${cmpHtml(V, K, 'imp', j)}</td>`).join('') + `<td>${man(iA)}${cmpHtml(V, K, 'imp', -1)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>클릭수 <span class="m">구글</span></td>' + clk.map((v, j) => `<td>${v ? fmt(v) : dash}${cmpHtml(V, K, 'clk', j)}</td>`).join('') + `<td>${fmt(kA)}${cmpHtml(V, K, 'clk', -1)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>클릭률 <span class="m">클릭÷노출</span></td>' + clk.map((v, j) => `<td>${rate(v, imp[j])}${cmpHtml(V, K, 'ctr', j)}</td>`).join('') + `<td>${rate(kA, iA)}${cmpHtml(V, K, 'ctr', -1)}</td></tr>`;
-        body += '<tr class="rg-sum rg-ads"><td>전환율 <span class="m">구글 전환÷클릭</span></td>' + conv.map((v, j) => `<td>${rate(v, clk[j])}<span class="m">${v ? fmt(cnt(v)) + '건' : ''}</span>${cmpHtml(V, K, 'cvr', j)}</td>`).join('') + `<td>${rate(vA, kA)}<span class="m">${fmt(cnt(vA))}건</span>${cmpHtml(V, K, 'cvr', -1)}</td></tr>`;
+        const dash = '<span class="m">-</span>', rate = (a, b) => b ? (a / b * 100).toFixed(2) + '%' : dash, cnt = v => Math.round(v * 10) / 10;
+        body += row('rg-sum rg-ads', '노출수 <span class="m">구글</span>', imp, v => `<td>${v ? man(v) : dash}</td>`, 'imp', man(iA));
+        body += row('rg-sum rg-ads', '클릭수 <span class="m">구글</span>', clk, v => `<td>${v ? fmt(v) : dash}</td>`, 'clk', fmt(kA));
+        body += row('rg-sum rg-ads', '클릭률 <span class="m">클릭÷노출</span>', clk, (v, j) => `<td>${rate(v, imp[j])}</td>`, 'ctr', rate(kA, iA));
+        body += row('rg-sum rg-ads', '전환율 <span class="m">구글 전환÷클릭</span>', conv, (v, j) => `<td>${rate(v, clk[j])}<span class="m">${v ? fmt(cnt(v)) + '건' : ''}</span></td>`, 'cvr', `${rate(vA, kA)}<span class="m">${fmt(cnt(vA))}건</span>`);
       }
     }
-    if (nd > 1) body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + tot.map(v => `<td>${(v / nd).toFixed(1)}</td>`).join('') + `<td>${(all / nd).toFixed(1)}</td></tr>`;
+    // 일자별 비교: 비교 기간 길이가 같으면 같은 순번의 날짜끼리 (예: 전주 같은 요일)
+    let kd = null;
+    if (K && CR[1] - CR[0] === to - from) {
+      kd = { n: Array.from({ length: nd }, () => new Array(NR).fill(0)), c: Array.from({ length: nd }, () => new Array(NR).fill(0)), b: Array.from({ length: nd }, () => new Array(NR).fill(0)) };
+      for (let i = 0; i < D.n; i++) {
+        const d = A.day[i]; if (d < CR[0] || d > CR[1]) continue;
+        const c = A.src[i]; if (!inScope(c)) continue;
+        if (S.dedupe && A.dup[i]) continue;
+        kd.n[d - CR[0]][reg[i]]++;
+        if (SP && SP.chs.has(c)) kd.b[d - CR[0]][SP.nat.has(c) ? NATION : reg[i]]++;
+      }
+      if (SP) SP.rows.forEach(r => { if (r[0] < CR[0] || r[0] > CR[1] || !inScope(r[1])) return; kd.c[r[0] - CR[0]][r[2]] += r[3]; });
+    }
+    const dCell = (k, j, cur) => {   // 일자 행의 비교 칸
+      if (!kd) return '<td class="rg-kc"></td>';
+      const S1 = a => j < 0 ? sumA(a) : a[j];
+      const pn = S1(kd.n[k]), pc = S1(kd.c[k]), pb = S1(kd.b[k]);
+      const prev = st.unit === 'cost' ? pc : st.unit === 'cpa' ? (pc && pb ? pc / pb : null) : pn;
+      if (!cur && !prev) return '<td class="rg-kc"></td>';
+      const show = st.unit === 'cost' ? (prev ? man(prev) : '-') : st.unit === 'cpa' ? (prev ? fmt(prev) : '-') : st.unit === 'pct' ? pct(pn, sumA(kd.n[k])) : fmt(prev);
+      let dd = '';
+      if (cur != null && prev && st.unit !== 'pct') { const r = (cur - prev) / prev * 100, good = st.unit === 'cpa' ? r < 0 : st.unit === 'cost' ? null : r > 0; dd = ` <b class="${good == null || !r ? '' : good ? 'good' : 'bad'}">${r > 0 ? '▲' : r < 0 ? '▼' : ''}${Math.abs(r).toFixed(0)}%</b>`; }
+      return `<td class="rg-kc"><span class="rg-cmp">${show}${dd}</span></td>`;
+    };
+    if (nd > 1) { kc = () => '<td class="rg-kc"></td>'; body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + VM(tot, v => `<td>${(v / nd).toFixed(1)}</td>`) + `<td>${(all / nd).toFixed(1)}</td>` + (K ? '<td class="rg-kc"></td>' : '') + '</tr>'; }
     for (let k = nd - 1; k >= 0; k--) {
       const r = day[k], s = r.reduce((a, b) => a + b, 0), d = from + k;
       const wk = new Date(d * 864e5).getUTCDay();
-      body += `<tr${wk === 0 || wk === 6 ? ' class="rg-we"' : ''}><td>${md(d)}${d === (D.asOf && D.asOf.day) ? ' <span class="m">진행 중</span>' : ''}${chgDay.get(d) ? ` <span class="rg-chgmark" title="구글 애즈 변경 ${chgDay.get(d)}건">변경 ${chgDay.get(d)}</span>` : ''}</td>` +
-        (st.unit === 'cost' ? cost[k].map(v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`).join('') + `<td><b>${man(cost[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
-        : st.unit === 'cpa' ? cost[k].map((v, j) => { const x = v && cdb[k][j] ? v / cdb[k][j] : 0, base = dTot[j] ? cTot[j] / dTot[j] : 0; const cls = x && base && cdb[k][j] >= 3 && Math.abs(x / base - 1) >= 0.25 ? (x < base ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${cpa(v, cdb[k][j])}</td>`; }).join('') + `<td><b>${cpa(cost[k].reduce((a, b) => a + b, 0), cdb[k].reduce((a, b) => a + b, 0))}</b></td></tr>`
-        : r.map((v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }).join('') +
-        `<td><b>${fmt(s)}</b></td></tr>`);
+      const cs = cost[k].reduce((a, b) => a + b, 0), cb = cdb[k].reduce((a, b) => a + b, 0);
+      const curOf = j => st.unit === 'cost' ? (j < 0 ? cs : cost[k][j]) : st.unit === 'cpa' ? (j < 0 ? (cs && cb ? cs / cb : null) : (cost[k][j] && cdb[k][j] ? cost[k][j] / cdb[k][j] : null)) : (j < 0 ? s : r[j]);
+      kc = j => dCell(k, j, curOf(j));
+      body += `<tr${wk === 0 || wk === 6 ? ' class="rg-we"' : ''}><td>${md(d)}${kd ? ` <span class="m">vs ${md(CR[0] + k)}</span>` : ''}${d === (D.asOf && D.asOf.day) ? ' <span class="m">진행 중</span>' : ''}${chgDay.get(d) ? ` <span class="rg-chgmark" title="구글 애즈 변경 ${chgDay.get(d)}건">변경 ${chgDay.get(d)}</span>` : ''}</td>` +
+        (st.unit === 'cost' ? VM(cost[k], v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`) + `<td><b>${man(cs)}</b></td>`
+        : st.unit === 'cpa' ? VM(cost[k], (v, j) => { const x = v && cdb[k][j] ? v / cdb[k][j] : 0, base = dTot[j] ? cTot[j] / dTot[j] : 0; const cls = x && base && cdb[k][j] >= 3 && Math.abs(x / base - 1) >= 0.25 ? (x < base ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${cpa(v, cdb[k][j])}</td>`; }) + `<td><b>${cpa(cs, cb)}</b></td>`
+        : VM(r, (v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }) + `<td><b>${fmt(s)}</b></td>`) +
+        (K ? kc(-1) : '') + '</tr>';
     }
     box.innerHTML = head + '<tbody>' + body + '</tbody>';
 
@@ -303,7 +397,7 @@
     if (CR) { $('rgKFrom').value = iso(CR[0]); $('rgKTo').value = iso(CR[1]); $('rgKFrom').max = $('rgKTo').max = iso(todayDay());
       $('rgKLab').textContent = (CR[1] - CR[0] + 1) + '일 · ' + CR[2]; $('rgKAuto').hidden = st.kFrom == null; }
     $('rgCmpNote').hidden = !CR;
-    if (CR) $('rgCmpNote').innerHTML = `각 칸 아래 작은 글씨는 <b>비교 기간(${CR[2]} ${md(CR[0])}${CR[0] !== CR[1] ? ' ~ ' + md(CR[1]) : ''})</b> 값과 증감이에요. <span class="good">파란색</span>은 좋아짐, <span class="bad">빨간색</span>은 나빠짐 (CPA는 낮아지면 좋음, 광고비는 색 없음, 클릭률·전환율은 %p 차이).`;
+    if (CR) $('rgCmpNote').innerHTML = `각 지역 오른쪽 <b>비교</b> 칸은 <b>비교 기간(${CR[2]} ${md(CR[0])}${CR[0] !== CR[1] ? ' ~ ' + md(CR[1]) : ''})</b> 값과 증감이에요. <span class="good">파란색</span>은 좋아짐, <span class="bad">빨간색</span>은 나빠짐 (CPA는 낮아지면 좋음, 광고비는 색 없음, 클릭률·전환율은 %p 차이).`;
     renderChg(from, to, CR);
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
