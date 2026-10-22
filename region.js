@@ -317,11 +317,17 @@
 
     // 일자 × 지역  (비교를 켜면 지역마다 바로 옆에 '비교' 칸)
     const vis = REGIONS.map((_, j) => !K || !!(tot[j] || K.tot[j] || cTot[j] || K.cTot[j]));   // 비교 때는 두 기간 모두 빈 지역 숨김
-    const VM = (arr, fn) => arr.map((v, j) => vis[j] ? fn(v, j) + (K ? kc(j) : '') : '').join('');
+    const VM = (arr, fn) => arr.map((v, j) => vis[j] ? fn(v, j) : '').join('');
     let kc = () => '';   // 행마다 바꿔 끼우는 비교 칸
     const kcell = (k, j) => `<td class="rg-kc">${cmpHtml(V, K, k, j)}</td>`;
-    const head = '<thead><tr><th>날짜</th>' + REGIONS.map((r, j) => vis[j] ? `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>` + (K ? '<th class="rg-kc">비교</th>' : '') : '').join('') + '<th>합계</th>' + (K ? '<th class="rg-kc">비교</th>' : '') + '</tr></thead>';
-    const row = (cls, label, arr, fn, k, totHtml) => { kc = j => kcell(k, j); return `<tr class="${cls}"><td>${label}</td>` + VM(arr, fn) + `<td>${totHtml}</td>` + (K ? kcell(k, -1) : '') + '</tr>'; };
+    // 비교 묶음: 원본 표(지역들 + 합계) 오른쪽에 같은 지역 순서로 '비교 · 증감'
+    const KB = () => K ? REGIONS.map((_, j) => vis[j] ? kc(j) : '').join('').replace('<td class="rg-kc"', '<td class="rg-kc rg-ksep"') + kc(-1) : '';
+    const nv = vis.filter(Boolean).length;
+    const lab = (a, b2) => a === b2 ? md(a) : md(a) + ' ~ ' + md(b2);
+    const head = '<thead>' + (K ? `<tr class="rg-hgroup"><th></th><th colspan="${nv + 1}">현재 · ${lab(from, to)}</th><th colspan="${nv + 1}" class="rg-kc rg-ksep">비교 · ${CR[2]} ${lab(CR[0], CR[1])} <span class="m">값 / 증감</span></th></tr>` : '') +
+      '<tr><th>날짜</th>' + REGIONS.map((r, j) => vis[j] ? `<th><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>` : '').join('') + '<th>합계</th>' +
+      (K ? REGIONS.map((r, j) => vis[j] ? `<th class="rg-kc${j === vis.indexOf(true) ? ' rg-ksep' : ''}"><i class="rg-dot" style="background:${COLORS[j]}"></i>${r}</th>` : '').join('') + '<th class="rg-kc">합계</th>' : '') + '</tr></thead>';
+    const row = (cls, label, arr, fn, k, totHtml) => { kc = j => kcell(k, j); return `<tr class="${cls}"><td>${label}</td>` + VM(arr, fn) + `<td>${totHtml}</td>` + KB() + '</tr>'; };
     let body = row('rg-sum', '기간 합계', tot, (v, j) => `<td>${cell(v, all)}<span class="m">${st.unit === 'pct' ? fmt(v) + '건' : pct(v, all)}</span></td>`, 'n', fmt(all));
     if (SP) {
       body += row('rg-sum rg-money', 'CPA <span class="m">광고비 있는 채널 DB 기준</span>', cTot, (v, j) => `<td>${cpa(v, dTot[j])}<span class="m">${dTot[j] ? fmt(dTot[j]) + '건' : ''}</span></td>`, 'cpa', `${cpa(cAll, dAll)}<span class="m">${fmt(dAll)}건</span>`);
@@ -359,7 +365,7 @@
       if (cur != null && prev && st.unit !== 'pct') { const r = (cur - prev) / prev * 100, good = st.unit === 'cpa' ? r < 0 : st.unit === 'cost' ? null : r > 0; dd = ` <b class="${good == null || !r ? '' : good ? 'good' : 'bad'}">${r > 0 ? '▲' : r < 0 ? '▼' : ''}${Math.abs(r).toFixed(0)}%</b>`; }
       return `<td class="rg-kc"><span class="rg-cmp">${show}${dd}</span></td>`;
     };
-    if (nd > 1) { kc = () => '<td class="rg-kc"></td>'; body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + VM(tot, v => `<td>${(v / nd).toFixed(1)}</td>`) + `<td>${(all / nd).toFixed(1)}</td>` + (K ? '<td class="rg-kc"></td>' : '') + '</tr>'; }
+    if (nd > 1) { kc = j => K ? `<td class="rg-kc"><span class="rg-cmp">${((j < 0 ? sumA(K.tot) : K.tot[j]) / (CR[1] - CR[0] + 1)).toFixed(1)}</span></td>` : ''; body += `<tr class="rg-sum rg-avg"><td>일평균</td>` + VM(tot, v => `<td>${(v / nd).toFixed(1)}</td>`) + `<td>${(all / nd).toFixed(1)}</td>` + KB() + '</tr>'; }
     for (let k = nd - 1; k >= 0; k--) {
       const r = day[k], s = r.reduce((a, b) => a + b, 0), d = from + k;
       const wk = new Date(d * 864e5).getUTCDay();
@@ -370,9 +376,10 @@
         (st.unit === 'cost' ? VM(cost[k], v => `<td>${v ? man(v) : '<span class="m">-</span>'}</td>`) + `<td><b>${man(cs)}</b></td>`
         : st.unit === 'cpa' ? VM(cost[k], (v, j) => { const x = v && cdb[k][j] ? v / cdb[k][j] : 0, base = dTot[j] ? cTot[j] / dTot[j] : 0; const cls = x && base && cdb[k][j] >= 3 && Math.abs(x / base - 1) >= 0.25 ? (x < base ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${cpa(v, cdb[k][j])}</td>`; }) + `<td><b>${cpa(cs, cb)}</b></td>`
         : VM(r, (v, j) => { const share = s ? v / s : 0, base = all ? tot[j] / all : 0, diff = share - base; const cls = s >= 10 && Math.abs(diff) >= 0.08 ? (diff > 0 ? ' class="hi"' : ' class="lo"') : ''; return `<td${cls}>${v ? cell(v, s) : '<span class="m">-</span>'}</td>`; }) + `<td><b>${fmt(s)}</b></td>`) +
-        (K ? kc(-1) : '') + '</tr>';
+        KB() + '</tr>';
     }
     box.innerHTML = head + '<tbody>' + body + '</tbody>';
+    box.classList.toggle('rg-cmpmode', !!K);
 
     // 채널 × 지역
     const chs = [...chm.keys()].sort((a, b) => a - b);
@@ -397,7 +404,7 @@
     if (CR) { $('rgKFrom').value = iso(CR[0]); $('rgKTo').value = iso(CR[1]); $('rgKFrom').max = $('rgKTo').max = iso(todayDay());
       $('rgKLab').textContent = (CR[1] - CR[0] + 1) + '일 · ' + CR[2]; $('rgKAuto').hidden = st.kFrom == null; }
     $('rgCmpNote').hidden = !CR;
-    if (CR) $('rgCmpNote').innerHTML = `각 지역 오른쪽 <b>비교</b> 칸은 <b>비교 기간(${CR[2]} ${md(CR[0])}${CR[0] !== CR[1] ? ' ~ ' + md(CR[1]) : ''})</b> 값과 증감이에요. <span class="good">파란색</span>은 좋아짐, <span class="bad">빨간색</span>은 나빠짐 (CPA는 낮아지면 좋음, 광고비는 색 없음, 클릭률·전환율은 %p 차이).`;
+    if (CR) $('rgCmpNote').innerHTML = `표 오른쪽 <b>비교 묶음</b>은 <b>비교 기간(${CR[2]} ${md(CR[0])}${CR[0] !== CR[1] ? ' ~ ' + md(CR[1]) : ''})</b> 값과 증감이에요. <span class="good">파란색</span>은 좋아짐, <span class="bad">빨간색</span>은 나빠짐 (CPA는 낮아지면 좋음, 광고비는 색 없음, 클릭률·전환율은 %p 차이).`;
     renderChg(from, to, CR);
     $('rgNote').textContent = '분류 기준: 비고(캠페인명)에 경기남부·수원·용인·화성·부천 등 → 경기남부, 충청 → 충청도, 서울, 전북·강원 → 전북/강원, 경북·대구 → 경북, 그 외 경기·MASS·MAIN → 경기남부, 메타(META·M 채널) → 전국, 나머지 → 기타' + (S.dedupe ? ' · 중복 제외 적용' : '');
   }
