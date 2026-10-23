@@ -174,17 +174,55 @@
     const all = C.filter(r => r[0] >= f && r[0] <= t && chs.indexOf(r[2]) >= 0);
     return { chs: chs, all: all, list: all.filter(r => st.chgType === 'all' || (st.chgType === 'main' ? CHG_MAIN.test(r[5]) : r[5] === st.chgType)) };
   }
+  // 타겟(키워드·지역 등) 대량 변경에서 "무엇을" 바꿨는지 알려주는 항목 찾기
+  const BULK_SKIP = /^(adGroup|campaign|criterionId|resourceName|상태|status|제외|negative|type|bidModifier|입찰 조정|cpcBidMicros|CPC 입찰|matchType|일치 유형)$/i;
+  const KIND_KO = { keyword: '키워드', 키워드: '키워드', 지역: '지역', geoTargetConstant: '지역', location: '지역', 잠재고객: '잠재고객', 관심사: '관심사', '광고 일정': '광고 일정' };
+  function bulkKind(det) {
+    const main = det.find(x => x.label && !BULK_SKIP.test(x.label));
+    const neg = det.find(x => /^(제외|negative)$/i.test(x.label));
+    const isNeg = !!neg && /^(예|true|yes|y|1)$/i.test(String(neg.text).trim());
+    const base = main ? (KIND_KO[main.label] || main.label) : '';
+    return { kind: base ? (isNeg ? '제외 ' : '') + base : '', item: main ? main.text : '' };
+  }
+  const isBulkType = t => /타겟$/.test(String(t || ''));
+  const toMin = h => { const p = String(h).split(':'); return +p[0] * 60 + +p[1]; };
   // 같은 날 · 같은 사람 · 같은 대상/작업 · 같은 변경 항목 · 15분 안 → 한 카드로 묶기
+  // 단, 키워드·지역 같은 타겟 대량 변경은 시간과 상관없이 「하루 · 캠페인 · 작업 · 종류」별로 한 카드로 묶기
   function groupChg(items) {
-    const toMin = h => { const p = String(h).split(':'); return +p[0] * 60 + +p[1]; };
     const out = [];
     items.forEach(r => {
-      const det = prettyDetail(r[7]), sig = [r[2], r[5], r[6], r[8], r[9], det.map(x => x.label).join(',')].join('|'), mm = toMin(r[1]);
+      const det = prettyDetail(r[7]), mm = toMin(r[1]);
+      if (isBulkType(r[5])) {
+        const bk = bulkKind(det), sig = ['B', r[2], r[5], r[6], r[3], bk.kind].join('|');
+        let g = out.find(x => x.sig === sig);
+        if (!g) { g = { sig: sig, bulk: true, kind: bk.kind, min: mm, max: mm, first: r[1], last: r[1], rows: [], dets: [], items: [], ags: new Map(), users: new Set() }; out.push(g); }
+        g.rows.push(r); g.dets.push(det); g.items.push(bk.item);
+        g.ags.set(r[4] || '(광고그룹 없음)', (g.ags.get(r[4] || '(광고그룹 없음)') || 0) + 1);
+        if (r[8]) g.users.add(r[8]);
+        if (mm < g.min) { g.min = mm; g.first = r[1]; }
+        if (mm > g.max) { g.max = mm; g.last = r[1]; }
+        return;
+      }
+      const sig = [r[2], r[5], r[6], r[8], r[9], det.map(x => x.label).join(',')].join('|');
       const g = out.find(x => x.sig === sig && Math.abs(x.min - mm) <= 15);
       if (g) { g.rows.push(r); g.dets.push(det); g.first = r[1]; }
       else out.push({ sig: sig, min: mm, last: r[1], first: r[1], rows: [r], dets: [det] });
     });
-    return out;
+    // 대량 묶음은 건수 많은 순으로 위에, 나머지는 원래 순서 유지
+    return out.map((g, i) => [g, i]).sort((a, b) => (b[0].bulk ? b[0].rows.length : 0) - (a[0].bulk ? a[0].rows.length : 0) || a[1] - b[1]).map(x => x[0]);
+  }
+  function bulkCard(g, multi, opc) {
+    const r = g.rows[0], n = g.rows.length, rg = classify(r[3]);
+    const what = (g.kind || r[5]) + ' ' + r[6];
+    const ags = [...g.ags.entries()].sort((a, b) => b[1] - a[1]);
+    const agHtml = ags.slice(0, 8).map(([a, c]) => `<span class="ag-c">${esc(a)} <b>${fmt(c)}</b></span>`).join('') + (ags.length > 8 ? `<span class="ag-c more">외 ${ags.length - 8}개 그룹</span>` : '');
+    const items = g.items.filter(Boolean), shown = items.slice(0, 300);
+    const list = items.length ? `<details class="bk-list"><summary>${esc(g.kind || '항목')} ${fmt(items.length)}개 보기</summary><div>${shown.map(x => `<span>${esc(x)}</span>`).join('')}${items.length > 300 ? `<span class="more">외 ${fmt(items.length - 300)}개</span>` : ''}</div></details>` : '';
+    const users = [...g.users];
+    return `<li class="op-${opc[r[6]] || 'upd'} bulk"><div class="rg-chg-top"><span class="t">${esc(g.first !== g.last ? g.first + '~' + g.last : r[1])}</span>` +
+      `${multi ? `<span class="ch">${esc(r[2])}</span>` : ''}<span class="by">${esc(users.length > 1 ? users[0] + ' 외 ' + (users.length - 1) + '명' : users[0] || '-')} · ${esc(r[9] || '')}</span></div>` +
+      `<div class="bk-head"><i style="background:${COLORS[rg]}" title="${REGIONS[rg]}"></i><b class="bk-camp">${esc(r[3] || '(계정 전체)')}</b> <span class="bk-what">${esc(what)}</span> <span class="bk-n">${fmt(n)}개</span></div>` +
+      `<div class="bk-ags">${agHtml}</div>` + list + '</li>';
   }
   function renderChg(from, to, cmp) {
     const side = $('rgSide');
@@ -210,7 +248,11 @@
       if (cards >= 150) break;
       const groups = groupChg(byDay.get(d)), inCmp = cmp && d >= cmp[0] && d <= cmp[1] && !(d >= from && d <= to);
       html += `<div class="rg-chg-day${inCmp ? ' cmp' : ''}">${md(d)}<span class="m">${byDay.get(d).length}건${inCmp ? ' · 비교 기간' : ''}</span></div><ul class="rg-chg">`;
+      // 그날 대량 변경 요약 (캠페인 · 무엇을 · 몇 개)
+      const bulks = groups.filter(g => g.bulk && g.rows.length > 1);
+      if (bulks.length) html += `<li class="bk-sum"><div class="bk-sum-h">대량 변경 요약</div>${bulks.map(g => `<div><span>${esc(g.rows[0][3] || '(계정 전체)')}</span><b>${esc((g.kind || g.rows[0][5]) + ' ' + g.rows[0][6])} ${fmt(g.rows.length)}개</b></div>`).join('')}</li>`;
       groups.slice(0, 150 - cards).forEach(g => {
+        if (g.bulk) { html += bulkCard(g, multi, opc); cards++; return; }
         const r = g.rows[0], n = g.rows.length, det = g.dets[0];
         const sameDet = g.dets.every(x => JSON.stringify(x) === JSON.stringify(det));
         const camps = [...new Map(g.rows.map(x => [x[3] + '\u0001' + x[4], x])).values()];
@@ -233,7 +275,7 @@
     side.innerHTML = `<div class="rg-side-h"><b>변경이력</b><span class="m">${esc(chs.join('·'))} · ${md(f0)}${f0 !== t0 ? ' ~ ' + md(t0) : ''} · ${fmt(all.length)}건</span></div>` +
       `<div class="rg-chg-f">${chips}</div>` +
       (html || '<p class="m">이 기간에 해당 변경이 없어요.</p>') + (cards >= 150 ? '<p class="m">최근 150묶음까지만 보여요. 기간을 줄이거나 위에서 대상을 골라 보세요.</p>' : '') +
-      '<p class="m rg-chg-foot">구글 애즈 「변경 내역」 기준 · 매시간 갱신 · 같은 사람이 15분 안에 같은 항목을 바꾼 건 한 줄로 묶었어요. 구글은 최근 30일까지만 제공해요.</p>';
+      '<p class="m rg-chg-foot">구글 애즈 「변경 내역」 기준 · 매시간 갱신 · 같은 사람이 15분 안에 같은 항목을 바꾼 건 한 줄로, 키워드·지역 같은 타겟 변경은 하루 단위로 캠페인별로 묶었어요. 구글은 최근 30일까지만 제공해요.</p>';
   }
 
   function render() {
